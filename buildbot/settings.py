@@ -44,5 +44,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
+    ARTIFACTS_PATH: Path = TEMP_DIR / "artifacts"
+
 
 settings = Settings()

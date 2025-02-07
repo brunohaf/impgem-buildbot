@@ -1,14 +1,14 @@
 from fastapi import APIRouter
 
-from buildbot.web.api.echo.schema import Message
+from buildbot.web.api.task.schema import Task, TaskRequest, TaskResponse
 
 router = APIRouter()
 
 
-@router.post("/", response_model=Message)
+@router.post("/", response_model=TaskResponse)
 async def send_echo_message(
-    incoming_message: Message,
-) -> Message:
+    task: TaskRequest,
+) -> TaskResponse:
     """
     Sends echo back to user.
 

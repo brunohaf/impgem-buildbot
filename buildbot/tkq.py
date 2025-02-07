@@ -12,3 +12,4 @@ taskiq_fastapi.init(
     broker,
     "buildbot.web.application:get_app",
 )
+
