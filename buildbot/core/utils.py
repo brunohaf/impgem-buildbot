@@ -1,13 +1,17 @@
-from typing import Any, ClassVar, Dict, Type
+from typing import Any, Dict, Type, TypeVar
+
+T = TypeVar("T", bound="Singleton")
 
 
-class SingletonMeta(Type):
-    """Metaclass for enforcing the Singleton pattern."""
+class SingletonMeta(type):
+    _instances: Dict[Type["Singleton"], "Singleton"] = {}
 
-    _instances: ClassVar[Dict[Type, object]] = {}
-
-    def __call__(cls, *args: Any, **kwargs: Dict[str, Any]) -> object:
-        """Returns the instance of the class."""
+    def __call__(cls: Type[T], *args: Any, **kwargs: Any) -> T:
+        """Returns the singleton instance of the class."""
         if cls not in cls._instances:
             cls._instances[cls] = super().__call__(*args, **kwargs)
         return cls._instances[cls]
+
+
+class Singleton(metaclass=SingletonMeta):
+    pass

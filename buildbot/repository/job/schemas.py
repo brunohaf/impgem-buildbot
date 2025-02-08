@@ -1,6 +1,8 @@
 from enum import StrEnum
+from pathlib import Path
 from typing import Dict
 
+from buildbot.core import settings
 from buildbot.repository.schemas import RepositoryBaseModel
 
 
@@ -21,6 +23,10 @@ class Job(RepositoryBaseModel):
     env_vars: Dict[str, str]
     task_id: str
     status: JobStatus = JobStatus.PENDING
+
+    @property
+    def output_path(self) -> Path:
+        return settings.OUTPUT_PATH / self.job_id
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Job):

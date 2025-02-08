@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from asyncio import Task
 from typing import Dict, Optional
@@ -11,7 +12,7 @@ class TaskRepository(ABC):
     """Interface for Task repository implementation classes."""
 
     @abstractmethod
-    def add(self, task: Task) -> None:
+    def create(self, task: Task) -> None:
         pass
 
     @abstractmethod
@@ -19,7 +20,7 @@ class TaskRepository(ABC):
         pass
 
     @abstractmethod
-    def update(self, new_task: Task) -> Optional[Task]:
+    def update(self, new_task: Task) -> None:
         pass
 
 
@@ -29,28 +30,34 @@ class TaskInMemoryRepository(TaskRepository, metaclass=SingletonMeta):
     def __init__(self):
         self._storage: Dict[str, Task] = {}
         self._logger = logger
+        self._lock = asyncio.Lock()
 
-    def add(self, entity: Task) -> None:
+    async def create(self, task: Task) -> None:
         """Add a Task to the repository."""
-        self._storage[entity.id] = entity
+        self._logger.info(f"Creating Task(id={task.id})")
+        async with self._lock:
+            self._storage[task.id] = task
+        self._logger.info(f"Task(id={task.id}) successfully created.")
+        return
 
     def get(self, id: str) -> Optional[Task]:
         """Retrieve a Task by its ID."""
-        return self._storage.get(id)
+        self._logger.info(f"Getting Task(id={id})")
+        task = self._storage.get(id)
+        if task is None:
+            self._logger.info(f"Cannot retrieve Task(id={id}). Not found")
+        self._logger.info(f"Successfully retrieved Task(id={id})")
+        return task
 
-    def update(self, new_task: Task) -> Optional[Task]:
+    async def update(self, new_task: Task) -> None:
         """Updates existing Task."""
-
-        if self._storage.get(new_task.id) is None:
-            self._logger.info(
-                f"Failed to update Task(id={new_task.id}) because it doesn't exist",
-            )
-            return None
-
-        self._storage[new_task.id] = new_task
+        self._logger.info(f"Updating Task(id={new_task.id})")
+        async with self._lock:
+            if self._storage.get(new_task.id) is None:
+                self._logger.info(f"Failed to update Task(id={id}). Not found")
+            self._storage[new_task.id] = new_task
         self._logger.info(f"Successfully updated Task(id={new_task.id})")
-
-        return new_task
+        return
 
 
 def get_task_repository() -> TaskRepository:

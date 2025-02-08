@@ -1,10 +1,7 @@
 import enum
 from pathlib import Path
-from tempfile import gettempdir
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-TEMP_DIR = Path(gettempdir())
 
 
 class LogLevel(str, enum.Enum):
@@ -44,7 +41,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    ARTIFACTS_PATH: Path = TEMP_DIR / "outputs"
+    base_jobs_output_path: Path = "/var/lib/buildbot/jobs/output"
 
 
 settings = Settings()

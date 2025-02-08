@@ -14,6 +14,11 @@ class CreateTaskResponse(BaseModel):
     task_id: str
 
 
+class UpdateTaskResponse(CreateTaskResponse):
+    """Task response model."""
+    pass
+
+
 class GetTaskResponse(BaseModel):
     """Task response model."""
 

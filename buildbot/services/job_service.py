@@ -1,38 +1,35 @@
+from io import BytesIO
 from pathlib import Path
-from typing import Optional
 
+import aiofiles
 from fastapi import Depends
 from loguru import logger
 
 from buildbot.api.job.schema import CreateJobRequest
-from buildbot.core.utils import SingletonMeta
-from buildbot.repository.job.artifact.repository import (
-    JobArtifactRepository,
-    get_job_artifact_repository,
-)
-from buildbot.repository.job.artifact.schemas import JobArtifact
+from buildbot.core.settings import settings
 from buildbot.repository.job.repository import JobRepository, get_job_repository
 from buildbot.repository.job.schemas import Job, JobStatus
-from buildbot.services import job_utils
 from buildbot.services.service_exceptions import (
-    JobArtifactNotFoundException,
     JobCreationException,
+    JobFailedException,
+    JobNotCompletedException,
     JobNotFoundException,
+    JobOutputAccessDeniedException,
     UnexpectedException,
 )
 
+BASE_OUTPUT_PATH: Path = settings.base_jobs_output_path.resolve()
 
-class JobService(metaclass=SingletonMeta):
+
+class JobService:
     """Service for Job operations."""
 
     def __init__(
         self,
-        job_repo: JobRepository = Depends(get_job_repository),
-        artifact_repo: JobArtifactRepository = Depends(get_job_artifact_repository),
+        job_repo: JobRepository = Depends(get_job_repository)
     ) -> None:
         self._logger = logger
         self._job_repo = job_repo
-        self._artifact_repo = artifact_repo
 
     def create(self, job_request: CreateJobRequest) -> str:
         """
@@ -44,13 +41,12 @@ class JobService(metaclass=SingletonMeta):
         :raises UnexpectedException: If an unexpected error occurs
         """
         try:
-            self._logger.info(f"Creating job for Task(id={job_request.task_id})")
             job = Job(task_id=job_request.task_id, env_vars=job_request.env_vars)
-            self._job_repo.add(job)
+            self._job_repo.create(job)
             return job.id
         except Exception as e:
             raise JobCreationException(
-                f"Failed to create job for Task with ID:  {job_request.task_id}",
+                f"Failed to create job for Task(id={job_request.task_id})",
                 e,
             )
 
@@ -64,76 +60,45 @@ class JobService(metaclass=SingletonMeta):
         :raises UnexpectedException: If an unexpected error occurs while retrieving the Job
         """
 
-        self._logger.info(f"Getting Job(id={job_id})")
-        try:
-            job = self._job_repo.get(job_id)
-        except Exception as e:
-            raise UnexpectedException(f"Unexpected error getting Job(id={job_id})", e)
-
-        if job is None:
-            raise JobNotFoundException(f"Job(id={job_id}) not found")
+        job = self._job_repo.get(job_id)
+        if not job:
+            raise JobNotFoundException(
+                f"Could not retrieve status. Job(id={job_id}) not found"
+            )
 
         return job.status
 
-    async def get_output(self, job_id: str, path: str) -> JobArtifact:
+    async def get_output(self, job_id: str, file_path: str) -> BytesIO:
         """
-        Get a file from a Job's output.
+        Retrieve a file from a Job's output.
 
         :param job_id: The ID of the Job
-        :param path: The path to the file within the Job's output
+        :param file_path: The path to the file within the Job's output
         :return: The contents of the file
-        :raises JobNotFoundException: If the Job does not exist or has not been completed
+        :raises JobNotFoundException: If the Job does not exist or is not completed
         """
         job = self._job_repo.get(job_id)
-        if job is None:
+        if not job:
             raise JobNotFoundException(
-                f"The output cannot be retrieved. Job(id={job_id}) not found",
+                f"Cannot retrieve output. Job(id={job_id}) not found."
             )
-        elif job.status != JobStatus.SUCCEEDED:
-            raise JobNotFoundException(
-                "The output cannot be retrieved."
-                f"Job(id={job_id}) has '{job.status}' status.",
+        if job.status != JobStatus.SUCCEEDED:
+            if job.status == JobStatus.FAILED:
+                raise JobFailedException(
+                    f"Cannot retrieve output. The Job(id={job_id}) has failed."
+                )
+            raise JobNotCompletedException(
+                f"Cannot retrieve output.The  Job(id={job_id}) has status '{job.status}'."
             )
-        else:
-            return await self._get_job_output(job_id, path)
+        return await self._get_job_output(job_id, file_path)
 
-    def _get_job_artifact(self, job_id: str) -> Optional[JobArtifact]:
-        """
-        Retrieve a JobArtifact for a given job ID.
+    async def _get_job_output(self, job_id: str, path: Path) -> BytesIO:
+        target = Path(path).resolve()
 
-        :param job_id: The ID of the Job
-        :return: The content of the JobArtifact if found, otherwise None
-        :raises UnexpectedException: If an error occurs while retrieving the JobArtifact
-        :raises JobArtifactNotFoundException: If no JobArtifact is found for the given job ID
-        """
-
-        try:
-            job_artifact = self._artifact_repo.get_by_job_id(job_id)
-        except Exception as e:
-            raise UnexpectedException(f"Failed to get output from Job(id={job_id})", e)
-        if job_artifact is None:
-            raise JobArtifactNotFoundException(
-                f"The output for Job(id={job_id}) was not found",
+        if not target.is_relative_to(BASE_OUTPUT_PATH / job_id):
+            raise JobOutputAccessDeniedException(
+                "Target path is outside Job's base directory."
             )
-        return job_artifact.content
 
-    async def _get_job_output(self, job_id: str, path: Path) -> Optional[JobArtifact]:
-        """
-        Retrieve the content of a JobArtifact for a given job ID and path.
-
-        :param job_id: The ID of the Job
-        :param path: The path to the file within the Job's output
-        :return: The content of the JobArtifact if found, otherwise None
-        :raises JobArtifactNotFoundException: If no JobArtifact is found for the given job ID or path
-        """
-        job_artifact = self._artifact_repo.get_by_job_id(job_id)
-        if job_artifact is None:
-            raise JobArtifactNotFoundException(
-                f"The output for Job(id={job_id}) was not found",
-            )
-        elif path not in job_artifact.output_path:
-            raise JobArtifactNotFoundException(
-                f"The path '{path}' was not found in the output of Job(id={job_id})",
-            )
-        else:
-            return await job_utils.get_file_by_path(path)
+        async with aiofiles.open(target, "rb") as f:
+            return BytesIO(await f.read())
