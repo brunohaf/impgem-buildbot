@@ -49,7 +49,7 @@ class JobInMemoryRepository(JobRepository, metaclass=AbstractSingletonMeta):
         self._logger.info(f"Successfully retrieved Job(id={id})")
         return job
 
-    async def update(self, new_job: Job) -> None:
+    async def update(self, new_job: Job) -> None:  # ! make it merge
         """Updates existing Job."""
         self._logger.info(f"Updating Job(id={new_job.id})")
         async with self._lock:

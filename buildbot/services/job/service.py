@@ -5,6 +5,7 @@ import aiofiles
 from fastapi import Depends
 from loguru import logger
 
+from buildbot.background.broker import execute_job, job_runner, job_runner_task
 from buildbot.core.settings import settings
 from buildbot.repository.job.repository import JobRepository, get_job_repository
 from buildbot.repository.job.schemas import Job, JobStatus
@@ -44,13 +45,14 @@ class JobService:
         :raises UnexpectedException: If an unexpected error occurs
         """
         try:
-            _ = await self._task_svc.get(job_dto.task_id)
+            task = await self._task_svc.get(job_dto.task_id)
         except TaskNotFoundException as e:
             raise JobCreationException(
                 "Could not create Job.", str(e)
             )
         job = Job(task_id=job_dto.task_id, env_vars=job_dto.env_vars)
         await self._job_repo.create(job)
+        await job_runner_task.send(job, task)
         return job.id
 
     async def get_status(self, job_id: str) -> JobStatus:
