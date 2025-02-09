@@ -5,18 +5,19 @@ import aiofiles
 from fastapi import Depends
 from loguru import logger
 
-from buildbot.api.job.schema import CreateJobRequest
 from buildbot.core.settings import settings
 from buildbot.repository.job.repository import JobRepository, get_job_repository
 from buildbot.repository.job.schemas import Job, JobStatus
+from buildbot.services.job.schema import JobDTO
 from buildbot.services.service_exceptions import (
     JobCreationException,
     JobFailedException,
     JobNotCompletedException,
     JobNotFoundException,
     JobOutputAccessDeniedException,
-    UnexpectedException,
+    TaskNotFoundException,
 )
+from buildbot.services.task.service import TaskService
 
 BASE_OUTPUT_PATH: Path = settings.base_jobs_output_path.resolve()
 
@@ -26,31 +27,33 @@ class JobService:
 
     def __init__(
         self,
-        job_repo: JobRepository = Depends(get_job_repository)
+        job_repo: JobRepository = Depends(get_job_repository),
+        task_svc: TaskService = Depends(),
     ) -> None:
         self._logger = logger
         self._job_repo = job_repo
+        self._task_svc = task_svc
 
-    def create(self, job_request: CreateJobRequest) -> str:
+    async def create(self, job_dto: JobDTO) -> str:
         """
         Create a Job.
 
-        :param job_request: The CreateJobRequest
+        :param job_dto: The JobDTO
         :return: The ID of the created Job
         :raises JobCreationException: If the Job cannot be created
         :raises UnexpectedException: If an unexpected error occurs
         """
         try:
-            job = Job(task_id=job_request.task_id, env_vars=job_request.env_vars)
-            self._job_repo.create(job)
-            return job.id
-        except Exception as e:
+            _ = await self._task_svc.get(job_dto.task_id)
+        except TaskNotFoundException as e:
             raise JobCreationException(
-                f"Failed to create job for Task(id={job_request.task_id})",
-                e,
+                "Could not create Job.", str(e)
             )
+        job = Job(task_id=job_dto.task_id, env_vars=job_dto.env_vars)
+        await self._job_repo.create(job)
+        return job.id
 
-    def get_status(self, job_id: str) -> JobStatus:
+    async def get_status(self, job_id: str) -> JobStatus:
         """
         Retrieve the status of a Job.
 
@@ -60,7 +63,7 @@ class JobService:
         :raises UnexpectedException: If an unexpected error occurs while retrieving the Job
         """
 
-        job = self._job_repo.get(job_id)
+        job = await self._job_repo.get(job_id)
         if not job:
             raise JobNotFoundException(
                 f"Could not retrieve status. Job(id={job_id}) not found"
@@ -77,18 +80,18 @@ class JobService:
         :return: The contents of the file
         :raises JobNotFoundException: If the Job does not exist or is not completed
         """
-        job = self._job_repo.get(job_id)
+        job = await self._job_repo.get(job_id)
         if not job:
             raise JobNotFoundException(
-                f"Cannot retrieve output. Job(id={job_id}) not found."
+                f"Job(id={job_id}) not found."
             )
         if job.status != JobStatus.SUCCEEDED:
             if job.status == JobStatus.FAILED:
                 raise JobFailedException(
-                    f"Cannot retrieve output. The Job(id={job_id}) has failed."
+                    f"The Job(id={job_id}) has failed."
                 )
             raise JobNotCompletedException(
-                f"Cannot retrieve output.The  Job(id={job_id}) has status '{job.status}'."
+                f"The Job(id={job_id}) has status '{job.status}'."
             )
         return await self._get_job_output(job_id, file_path)
 
@@ -102,3 +105,7 @@ class JobService:
 
         async with aiofiles.open(target, "rb") as f:
             return BytesIO(await f.read())
+
+
+def get_job_service() -> JobService:
+    return JobService()

@@ -5,26 +5,26 @@ from typing import Dict, Optional
 
 from loguru import logger
 
-from buildbot.core.utils import SingletonMeta
+from buildbot.core.utils import AbstractSingletonMeta
 
 
 class TaskRepository(ABC):
     """Interface for Task repository implementation classes."""
 
     @abstractmethod
-    def create(self, task: Task) -> None:
+    async def create(self, task: Task) -> None:
         pass
 
     @abstractmethod
-    def get(self, id: str) -> Optional[Task]:
+    async def get(self, id: str) -> Optional[Task]:
         pass
 
     @abstractmethod
-    def update(self, new_task: Task) -> None:
+    async def update(self, new_task: Task) -> None:
         pass
 
 
-class TaskInMemoryRepository(TaskRepository, metaclass=SingletonMeta):
+class TaskInMemoryRepository(TaskRepository, metaclass=AbstractSingletonMeta):
     """In-memory Task Repository Singleton."""
 
     def __init__(self):
@@ -40,10 +40,11 @@ class TaskInMemoryRepository(TaskRepository, metaclass=SingletonMeta):
         self._logger.info(f"Task(id={task.id}) successfully created.")
         return
 
-    def get(self, id: str) -> Optional[Task]:
+    async def get(self, id: str) -> Optional[Task]:
         """Retrieve a Task by its ID."""
         self._logger.info(f"Getting Task(id={id})")
         task = self._storage.get(id)
+        await asyncio.sleep(0.1)
         if task is None:
             self._logger.info(f"Cannot retrieve Task(id={id}). Not found")
         self._logger.info(f"Successfully retrieved Task(id={id})")

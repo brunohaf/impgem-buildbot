@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 from typing import Any
 
-from loguru import Logger, logger
+import loguru
 
 
 class ExceptionBase(Exception):
     """Base exception class."""
 
-    _logger: Logger = logger
+    _logger:  loguru.Logger = loguru.logger
 
     def __init__(self, message: str, *args: Any) -> None:
         self._logger.error(message)
+
         super().__init__(message, *args)
 
 

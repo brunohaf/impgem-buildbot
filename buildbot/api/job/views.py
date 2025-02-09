@@ -3,13 +3,11 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from buildbot.api.job.schema import (
-    CreateJobRequest,
-    CreateJobResponse,
-    GetJobStatusResponse,
-)
-from buildbot.services.job_service import JobService
+from buildbot.api.job.schema import CreateJobResponse, GetJobStatusResponse
+from buildbot.services.job.schema import JobDTO
+from buildbot.services.job.service import JobService, get_job_service
 from buildbot.services.service_exceptions import (
+    JobCreationException,
     JobFailedException,
     JobNotCompletedException,
     JobNotFoundException,
@@ -21,7 +19,7 @@ router = APIRouter()
 
 @router.post("/", response_model=CreateJobResponse, tags=["job"])
 async def create_job(
-    job_request: CreateJobRequest,
+    job_request: JobDTO,
     job_svc: JobService = Depends(),
 ) -> CreateJobResponse:
     """
@@ -30,7 +28,11 @@ async def create_job(
     :param job_request: The CreateJobRequest
     :return: The ID of the created Job
     """
-    return CreateJobResponse(job_id=job_svc.create(job_request))
+    try:
+        job_id = await job_svc.create(job_request)
+    except JobCreationException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return CreateJobResponse(job_id=job_id)
 
 
 @router.get("/{job_id}/status", tags=["job"])
@@ -46,13 +48,13 @@ async def get_job_status(
     :raises HTTPException: If the Job is not found
     """
     try:
-        job_svc.get_status(job_id)
-        return GetJobStatusResponse(status=job_svc.get_status(job_id))
+        job_status = await job_svc.get_status(job_id)
+        return GetJobStatusResponse(status=job_status)
     except JobNotFoundException:
         raise HTTPException(status_code=404, detail="Job not found")
 
 
-@router.get("/{job_id}/output/{path}", tags=["job"])
+@router.get("/{job_id}/output/{file_path:path}", tags=["job"])
 async def get_job_output(
     job_id: str,
     path: Path,
@@ -66,16 +68,23 @@ async def get_job_output(
     :return: The contents of the file
     """
     try:
-        job_svc.get_status(job_id)
         job_output = await job_svc.get_output(job_id, path)
         return StreamingResponse(content=job_output)
     except JobOutputAccessDeniedException:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(
+            status_code=403, detail="Cannot retrieve the output. Access denied"
+        )
     except JobNotCompletedException:
-        raise HTTPException(status_code=409, detail="Job not completed yet")
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot retrieve the output. Job not completed yet",
+        )
     except JobFailedException:
         raise HTTPException(
-            status_code=410, detail="Job failed due to internal error"
+            status_code=410,
+            detail="Cannot retrieve the output. Job failed due to internal error",
         )
     except JobNotFoundException:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=404, detail="Cannot retrieve the output. Job not found"
+        )

@@ -8,6 +8,13 @@ class CreateTaskRequest(BaseModel):
     script: str
 
 
+@field_validator("script", mode="before")
+class UpdateTaskRequest(BaseModel):
+    """Task request model."""
+
+    script: str
+
+
 class CreateTaskResponse(BaseModel):
     """Task response model."""
 
@@ -21,12 +28,5 @@ class UpdateTaskResponse(CreateTaskResponse):
 
 class GetTaskResponse(BaseModel):
     """Task response model."""
-
-    script: str
-
-
-@field_validator("script", mode="before")
-class UpdateTaskRequest(BaseModel):
-    """Task request model."""
 
     script: str

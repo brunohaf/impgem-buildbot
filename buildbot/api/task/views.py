@@ -1,20 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from buildbot.api.task.schema import (
-    CreateTaskRequest,
     CreateTaskResponse,
     GetTaskResponse,
     UpdateTaskResponse,
 )
 from buildbot.services.service_exceptions import TaskNotFoundException
-from buildbot.services.task_service import TaskService
+from buildbot.services.task.schema import TaskDTO
+from buildbot.services.task.service import TaskService
 
 router = APIRouter()
 
 
 @router.post("/", response_model=CreateTaskResponse)
 async def create_task(
-    task: CreateTaskRequest,
+    task: TaskDTO,
     task_svc: TaskService = Depends(),
 ) -> CreateTaskResponse:
     """
@@ -23,10 +23,11 @@ async def create_task(
     :param task: The CreateTaskRequest
     :return: The ID of the created Task
     """
-    return CreateTaskResponse(task_svc.create(task))
+    task_id = await task_svc.create(task)
+    return CreateTaskResponse(task_id=task_id)
 
 
-@router.get("/", response_model=CreateTaskResponse)
+@router.get("/", response_model=GetTaskResponse)
 async def get_task(
     task_id: str,
     task_svc: TaskService = Depends(),
@@ -39,7 +40,7 @@ async def get_task(
     :raises TaskNotFoundException: If the Task does not exist
     """
     try:
-        task = task_svc.get(task_id)
+        task = await task_svc.get(task_id)
         return GetTaskResponse(script=task.script)
     except TaskNotFoundException as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -48,7 +49,7 @@ async def get_task(
 @router.put("/", response_model=UpdateTaskResponse)
 async def update_task(
     task_id: str,
-    task: CreateTaskRequest,
+    task: TaskDTO,
     task_svc: TaskService = Depends(),
 ) -> UpdateTaskResponse:
     """
@@ -60,6 +61,7 @@ async def update_task(
     :raises UnexpectedException: If an unexpected error occurs
     """
     try:
-        return UpdateTaskResponse(task_svc.update(task_id, task))
+        task_id = await task_svc.update(task_id, task)
+        return UpdateTaskResponse(task_id=task_id)
     except TaskNotFoundException as e:
         raise HTTPException(status_code=404, detail=str(e))

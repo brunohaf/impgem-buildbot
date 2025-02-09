@@ -1,3 +1,4 @@
+from abc import ABCMeta
 from typing import Any, Dict, Type, TypeVar
 
 T = TypeVar("T", bound="Singleton")
@@ -15,3 +16,9 @@ class SingletonMeta(type):
 
 class Singleton(metaclass=SingletonMeta):
     pass
+
+
+class AbstractSingletonMeta(SingletonMeta, ABCMeta):
+    pass
+
+
