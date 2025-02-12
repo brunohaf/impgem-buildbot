@@ -7,7 +7,7 @@ from loguru import logger
 
 from buildbot.background.broker import execute_job, job_runner, job_runner_task
 from buildbot.core.settings import settings
-from buildbot.repository.job.repository import JobRepository, get_job_repository
+from buildbot.repository.job.base_repository import JobRepository, get_job_repository
 from buildbot.repository.job.schemas import Job, JobStatus
 from buildbot.services.job.schema import JobDTO
 from buildbot.services.service_exceptions import (

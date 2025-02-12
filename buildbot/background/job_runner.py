@@ -10,7 +10,7 @@ from loguru import logger
 from virtualenv import create
 
 from buildbot.core.settings import settings
-from buildbot.repository.job.repository import JobRepository
+from buildbot.repository.job.base_repository import JobRepository
 from buildbot.repository.job.schemas import Job, JobStatus
 
 BASE_OUTPUT_PATH: Path = settings.base_jobs_output_path.resolve()

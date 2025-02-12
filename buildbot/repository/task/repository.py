@@ -1,65 +1,42 @@
-import asyncio
-from abc import ABC, abstractmethod
-from asyncio import Task
-from typing import Dict, Optional
+from typing import Optional
 
-from loguru import logger
-
-from buildbot.core.utils import AbstractSingletonMeta
+from buildbot.repository.base_repository import BaseRedisRepository
+from buildbot.repository.task.schemas import Task
 
 
-class TaskRepository(ABC):
-    """Interface for Task repository implementation classes."""
+class TaskRedisRepository(BaseRedisRepository):
+    """Redis-backed Task Repository."""
 
-    @abstractmethod
-    async def create(self, task: Task) -> None:
-        pass
-
-    @abstractmethod
-    async def get(self, id: str) -> Optional[Task]:
-        pass
-
-    @abstractmethod
-    async def update(self, new_task: Task) -> None:
-        pass
-
-
-class TaskInMemoryRepository(TaskRepository, metaclass=AbstractSingletonMeta):
-    """In-memory Task Repository Singleton."""
-
-    def __init__(self):
-        self._storage: Dict[str, Task] = {}
-        self._logger = logger
-        self._lock = asyncio.Lock()
+    def _get_key(self, id: str) -> str:
+        """Returns a Redis key for a Task."""
+        return f"task:{id}"
 
     async def create(self, task: Task) -> None:
-        """Add a Task to the repository."""
-        self._logger.info(f"Creating Task(id={task.id})")
-        async with self._lock:
-            self._storage[task.id] = task
-        self._logger.info(f"Task(id={task.id}) successfully created.")
-        return
+        """Creates a new Task in Redis."""
+        await self._redis.set(self._get_key(task.id), task.model_dump_json())
 
     async def get(self, id: str) -> Optional[Task]:
-        """Retrieve a Task by its ID."""
-        self._logger.info(f"Getting Task(id={id})")
-        task = self._storage.get(id)
-        await asyncio.sleep(0.1)
+        """Retrieves a Task by ID."""
+        task_data = await self._redis.get(self._get_key(id))
+        task = Task.model_validate_json(task_data) if task_data else None
         if task is None:
-            self._logger.info(f"Cannot retrieve Task(id={id}). Not found")
-        self._logger.info(f"Successfully retrieved Task(id={id})")
+            self._logger.warning(f"Could not retrieve Task(id={id})")
+            return
         return task
 
     async def update(self, new_task: Task) -> None:
-        """Updates existing Task."""
-        self._logger.info(f"Updating Task(id={new_task.id})")
-        async with self._lock:
-            if self._storage.get(new_task.id) is None:
-                self._logger.info(f"Failed to update Task(id={id}). Not found")
-            self._storage[new_task.id] = new_task
-        self._logger.info(f"Successfully updated Task(id={new_task.id})")
-        return
+        """Updates an existing task in Redis."""
+        task_data = await self._redis.get(new_task.id)
+        if task_data is None:
+            self._logger.warning(
+                f"Failed to update Task(id={new_task.id}). Not found"
+            )
+            return None
 
-
-def get_task_repository() -> TaskRepository:
-    return TaskInMemoryRepository()
+        updated_task_data = Task.model_validate(
+            {
+                **Task.model_validate_json(task_data),
+                **new_task.model_dump(exclude_unset=True),
+            }.model_dump_json()
+        )
+        await self._redis.set(new_task.id, updated_task_data)

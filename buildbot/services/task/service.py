@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from fastapi import Depends
 from loguru import logger
 
-from buildbot.repository.task.repository import TaskRepository, get_task_repository
+from buildbot.repository.task.base_repository import TaskRepository, get_task_repository
 from buildbot.repository.task.schemas import Task
 from buildbot.services.service_exceptions import (
     TaskCreationException,

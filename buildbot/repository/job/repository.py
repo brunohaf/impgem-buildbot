@@ -1,65 +1,62 @@
-import asyncio
-from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from abc import ABC
+from typing import Optional
 
-from loguru import logger
-
-from buildbot.core.utils import AbstractSingletonMeta
+from buildbot.core.settings import settings
+from buildbot.repository import redis_utils
+from buildbot.repository.base_repository import BaseRedisRepository, BaseRepository
 from buildbot.repository.job.schemas import Job
+from buildbot.services.service_exceptions import JobCreationException
 
 
-class JobRepository(ABC):
-    """Interface for Job repository implementation classes."""
+class JobRepository(ABC, BaseRepository):
+    pass
 
-    @abstractmethod
+
+class JobRedisRepository(JobRepository, BaseRedisRepository):
+    """Redis-backed Job Repository."""
+
+    def _get_key(self, id):
+        return f"job:${id}"
+
+    # ? Separation of concerns is not ideal here for simplicity's sake.
+    # ? A set(ssad) is created for each task for efficient job lookup
+    # ? when retrieving jobs.envVars for running task.script.
+    # ? The set would be used for batching remove jobs if the task is deleted.
+    # ? correlating tasks and jobs should be done at database level,
+    # ? or a JobTask facade at the service layer.
     async def create(self, job: Job) -> None:
-        pass
+        """Creates a new Job in Redis."""
 
-    @abstractmethod
-    async def get(self, id: str) -> Optional[Job]:
-        pass
+        task_exists = await self._redis.exists(
+            redis_utils.get_task_key(job.task_id)
+        )
 
-    @abstractmethod
-    async def update(self, new_job: Job) -> None:
-        pass
+        if not task_exists:
+            self._logger.warning(
+                f"Failed to create Job(id={job.id})."
+                f" Task(id={job.task_id}) was not found."
+            )
+            return
 
-
-class JobInMemoryRepository(JobRepository, metaclass=AbstractSingletonMeta):
-    """In-memory Job Repository Singleton."""
-
-    def __init__(self):
-        self._storage: Dict[str, Job] = {}
-        self._logger = logger
-        self._lock = asyncio.Lock()
-
-    async def create(self, job: Job) -> None:
-        self._logger.info(f"Creating Job(id={job.id})")
-        async with self._lock:
-            self._storage[job.id] = job
-        self._logger.info(f"Job(id={job.id}) successfully created.")
-        return
+        job_data = job.model_dump_json()
+        async with self._redis.pipeline() as pipe:
+            job_key = self._get_key(job.id)
+            await pipe.set(job_key, job_data).sadd(
+                redis_utils.get_task_jobs_key(job.task_id), job_key
+            )
 
     async def get(self, id: str) -> Optional[Job]:
-        """Retrieve a Job by its ID."""
-        self._logger.info(f"Getting Job(id={id})")
-        job = self._storage.get(id)
-        await asyncio.sleep(0.1)
-        if job is None:
-            self._logger.info(f"Cannot retrieve Job(id={id}). Not found")
-        self._logger.info(f"Successfully retrieved Job(id={id})")
+        """Retrieves a Job by ID."""
+        job_data = await self._redis.get(redis_utils.get_key(Job(id=id)))
+        job = Job.model_validate_json(job_data) if job_data else None
+        if (job is None):
+            self._logger.warning(f"Could not retrieve Job(id={id})")
+            return
         return job
 
-    async def update(self, new_job: Job) -> None:  # ! make it merge
-        """Updates existing Job."""
-        self._logger.info(f"Updating Job(id={new_job.id})")
-        async with self._lock:
-            if self._storage.get(new_job.id) is None:
-                self._logger.info(f"Failed to update Job(id={id}). Not found")
-            self._storage[new_job.id] = new_job
-        self._logger.info(f"Successfully updated Job(id={new_job.id})")
-        return
 
-
-def get_job_repository() -> JobRepository:
-    """Returns the singleton JobRepository instance."""
-    return JobInMemoryRepository()
+# ? A RepositoryType enum and a factory function
+# ? could streamline this for future implementations of JobRepository.
+async def get_job_repository() -> JobRepository:
+    """Returns the singleton JobRedisRepository."""
+    return await JobRedisRepository.initialize(settings.redis.get_url())

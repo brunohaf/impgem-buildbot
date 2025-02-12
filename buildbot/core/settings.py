@@ -15,6 +15,20 @@ class LogLevel(str, enum.Enum):
     FATAL = "FATAL"
 
 
+class RedisSettings(BaseSettings):
+    """Redis settings."""
+    host: str = "redis://localhost"
+    port: int = 6379
+
+    def get_url(self) -> str:
+        return f"redis://{self.host}:{self.port}/0"
+
+
+class BuildBotJobSettings(BaseSettings):
+    """BuildBotJob settings."""
+    base_output_path: Path = "/var/lib/buildbot/jobs/output"
+
+
 class Settings(BaseSettings):
     """
     Application settings.
@@ -41,7 +55,8 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    base_jobs_output_path: Path = "/var/lib/buildbot/jobs/output"
+    redis: RedisSettings = RedisSettings()
+    buildbot_job: BuildBotJobSettings = BuildBotJobSettings()
 
 
 settings = Settings()

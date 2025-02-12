@@ -20,5 +20,3 @@ class Singleton(metaclass=SingletonMeta):
 
 class AbstractSingletonMeta(SingletonMeta, ABCMeta):
     pass
-
-

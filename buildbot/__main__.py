@@ -1,3 +1,5 @@
+from typing import Tuple, TypeVar
+
 import uvicorn
 
 from buildbot.core.settings import settings
