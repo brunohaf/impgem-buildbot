@@ -7,13 +7,13 @@ repos:
 
           - id: black
             name: Format with Black
-            entry: poetry run black
+            entry: conda run -n neara-buildbot poetry run black
             language: system
             types: [python]
 
           - id: ruff
             name: Check with Ruff
-            entry: poetry run ruff
+            entry: conda run -n neara-buildbot poetry run ruff
             language: system
             pass_filenames: false
             always_run: true
@@ -21,7 +21,7 @@ repos:
 
           - id: mypy
             name: Validate types with MyPy
-            entry: poetry run mypy
+            entry: conda run -n neara-buildbot poetry run mypy
             language: system
             types: [python]
             pass_filenames: false

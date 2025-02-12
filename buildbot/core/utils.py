@@ -1,35 +1,24 @@
-import os
-import shutil
-from io import BytesIO
-from pathlib import Path
+from abc import ABCMeta
+from typing import Any, Dict, Type, TypeVar
 
-import aiofiles
+T = TypeVar("T", bound="Singleton")
 
 
 class SingletonMeta(type):
-    """Metaclass for enforcing the Singleton pattern."""
+    _instances: Dict[Type["Singleton"], "Singleton"] = {}
 
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls: Type[T], *args: Any, **kwargs: Any) -> T:
+        """Returns the singleton instance of the class."""
         if cls not in cls._instances:
             cls._instances[cls] = super().__call__(*args, **kwargs)
         return cls._instances[cls]
 
 
-async def zip_folder(folder_path: Path) -> BytesIO:
-    """Zip the entire folder using shutil and return as a BytesIO stream."""
-    zip_buffer = BytesIO()
+class Singleton(metaclass=SingletonMeta):
+    pass
 
-    temp_zip_path = folder_path.parent / f"{folder_path.name}.zip"
 
-    shutil.make_archive(temp_zip_path.stem, "zip", folder_path)
+class AbstractSingletonMeta(SingletonMeta, ABCMeta):
+    pass
 
-    async with aiofiles.open(temp_zip_path, "rb") as f:
-        content = await f.read()
-        zip_buffer.write(content)
 
-    os.remove(temp_zip_path)
-
-    zip_buffer.seek(0)
-    return zip_buffer
