@@ -17,7 +17,9 @@ from app.services.task.service import TaskQueryService, get_task_service
 from fastapi import Depends
 from loguru import logger
 
-BASE_OUTPUT_PATH: Path = settings.buildbot_job.base_output_path.resolve()
+from buildbot.app.background.job_manager import JobManager, get_job_manager
+
+base_workdir: Path = settings.buildbot_job.base_workdir.resolve()
 
 
 class JobService:
@@ -26,10 +28,12 @@ class JobService:
     def __init__(
         self,
         job_repo: JobRepository = Depends(get_job_repository),
+        job_manager: JobManager = Depends(get_job_manager),
         task_svc: TaskQueryService = Depends(get_task_service),
     ) -> None:
         self._logger = logger
         self._job_repo = job_repo
+        self._job_manager = job_manager
         self._task_svc = task_svc
 
     async def _check_task_exists(self, task_id: str) -> None:
@@ -52,10 +56,10 @@ class JobService:
             job = Job(task_id=job_dto.task_id, env_vars=job_dto.env_vars)
             await self._job_repo.create(job)
             await self._job_repo.associate_job_with_task(job.id, job.task_id)
-            # await job_runner_task.send(job, task)
+            self._job_manager.run_job_in_container.send(job)
             return job.id
         except Exception as e:
-            raise JobCreationError() from e
+            raise JobCreationError from e
 
     async def get_status(self, job_id: str) -> JobStatus:
         """
@@ -92,7 +96,7 @@ class JobService:
 
     async def _get_job_output(self, job_id: str, path: Path) -> BytesIO:
         target = Path(path).resolve()
-        if not target.is_relative_to(BASE_OUTPUT_PATH / job_id):
+        if not target.is_relative_to(base_workdir / job_id):
             raise JobOutputAccessDeniedError(job_id, path)
         async with aiofiles.open(target, "rb") as f:
             return BytesIO(await f.read())

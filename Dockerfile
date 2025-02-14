@@ -15,7 +15,7 @@ WORKDIR /app/src
 RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main
 
 # Copying actuall application
-COPY . /app/src/
+COPY /buildbot/app /app/src/
 RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main
 
 CMD ["/usr/local/bin/python", "-m", "buildbot"]

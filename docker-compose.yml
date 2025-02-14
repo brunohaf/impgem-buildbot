@@ -27,7 +27,7 @@ services:
     command:
       - taskiq
       - worker
-      - app.tkq:broker
+      - app.background:broker
 
 volumes:
   buildbot_data:

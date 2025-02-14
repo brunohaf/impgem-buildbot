@@ -28,7 +28,7 @@ class RedisSettings(BaseSettings):
 class BuildBotJobSettings(BaseSettings):
     """BuildBotJob settings."""
 
-    base_output_path: Path = "/var/lib/app/jobs/output"
+    base_workdir: Path = "/var/lib/app/buildbot/workdir"
 
 
 class Settings(BaseSettings):
