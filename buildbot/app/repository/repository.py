@@ -40,7 +40,7 @@ class BaseRedisRepository(BaseRepository, metaclass=AbstractSingletonMeta):
     _pool = None
 
     @classmethod
-    async def initialize(
+    def initialize(
         cls,
         redis_url: str = "redis://localhost:6379/0",
     ) -> "BaseRedisRepository":

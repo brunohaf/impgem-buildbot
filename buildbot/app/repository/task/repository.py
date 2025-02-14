@@ -1,6 +1,6 @@
 from typing import Optional
 
-from app.core import settings
+from app.core.settings import settings
 from app.repository.repository import BaseRedisRepository, BaseRepository
 from app.repository.task.schemas import Task
 
@@ -47,9 +47,12 @@ class TaskRedisRepository(TaskRepository, BaseRedisRepository):
         await self._redis.set(new_task.id, updated_task_data)
         return new_task.id
 
+    async def delete(self, id: str) -> None:
+        """Deletes a Task by ID."""
+
 
 # ? A RepositoryType enum and a factory function
 # ? could streamline this for future implementations of TaskRepository.
-async def get_task_repository() -> TaskRepository:
+def get_task_repository() -> TaskRepository:
     """Returns the singleton TaskRedisRepository."""
-    return await TaskRedisRepository.initialize(settings.redis.get_url())
+    return TaskRedisRepository.initialize(settings.redis.get_url())

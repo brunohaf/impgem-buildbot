@@ -20,6 +20,9 @@ class BaseError(Exception):
     def __str__(self) -> str:
         return self.message
 
+    def __repr__(self) -> str:
+        return self.message
+
 
 class JobNotFoundError(BaseError):
     """Error raised when a Job is not found."""
@@ -92,8 +95,12 @@ class TaskNotFoundError(BaseError):
 class TaskCreationError(BaseError):
     """Error raised when a Task cannot be created."""
 
+    def __init__(self, *args: object) -> None:
+        self.message = self._format_message()
+        super().__init__(*args)
+
     def _format_message(self) -> str:
-        return f"Could not create Task. {self.__cause__}."
+        return "Could not create the Task."
 
 
 class TaskNotUpdatedError(BaseError):

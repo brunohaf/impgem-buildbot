@@ -58,6 +58,6 @@ class JobRedisRepository(JobRepository, BaseRedisRepository):
 
 # ? A RepositoryType enum and a factory function
 # ? could streamline this for future implementations of JobRepository.
-async def get_job_repository() -> JobRepository:
+def get_job_repository() -> JobRepository:
     """Returns the singleton JobRedisRepository."""
-    return await JobRedisRepository.initialize(settings.redis.get_url())
+    return JobRedisRepository.initialize(settings.redis.get_url())

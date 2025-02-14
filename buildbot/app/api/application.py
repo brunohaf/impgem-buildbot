@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import time
 from importlib import metadata
 from pathlib import Path
 
+import loguru
 from app.api.lifespan import lifespan_setup
 from app.api.router import api_router
 from app.core.log import configure_logging
@@ -14,19 +17,31 @@ from starlette.middleware.base import BaseHTTPMiddleware
 APP_ROOT = Path(__file__).parent.parent
 
 
+_logger: loguru.Logger = logger
+
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Logs each incoming request and outgoing response."""
 
     async def dispatch(self, request: Request, call_next: callable) -> None:
-        """Logs the request method, path, response status code and duration of the request."""  # noqa: E501
-        logger.info(f"Request: {request.method} {request.url.path}")
+        """Logs the request method, path, response status code, duration of the request, and errors."""
         start_time = time.time()
+        _logger.info(f"Request: {request.method} {request.url.path}")
 
-        response = await call_next(request)
-        duration = time.time() - start_time
-        logger.info(f"Response: {response.status_code} - {round(duration, 3)}s")
+        try:
+            response = await call_next(request)
 
-        return response
+            duration = time.time() - start_time
+            _logger.info(f"Response: {response.status_code} - {round(duration, 3)}s")
+            return response
+        except Exception as e:
+            duration = time.time() - start_time
+            _logger.error(
+                f"Error while processing request: {e.__class__.__name__} - {e}. "
+                f"Request: {request.method} {request.url.path}, "
+                f"Duration: {round(duration, 3)}s",
+            )
+            raise
 
 
 def get_app() -> FastAPI:
@@ -49,10 +64,9 @@ def get_app() -> FastAPI:
     )
 
     app.add_middleware(RequestLoggingMiddleware)
-    # Main router for the API.
     app.include_router(router=api_router, prefix="/api")
-    # Adds static directory.
-    # This directory is used to access swagger files.
+
+    # Adds static directory to used to access swagger files.
     app.mount("/static", StaticFiles(directory=APP_ROOT / "static"), name="static")
 
     return app
