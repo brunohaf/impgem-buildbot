@@ -38,7 +38,7 @@ All environment variables should start with "BUILDBOT\_" prefix.
 For example if you see in your "buildbot/settings.py" a variable named like
 `random_parameter`, you should provide the "BUILDBOT_RANDOM_PARAMETER"
 variable to configure the value. This behaviour can be changed by overriding `env_prefix` property
-in `buildbot.settings.Settings.Config`.
+in `app.settings.Settings.Config`.
 
 An example of .env file:
 

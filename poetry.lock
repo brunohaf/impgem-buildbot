@@ -13,25 +13,6 @@ files = [
 ]
 
 [[package]]
-name = "aioredis"
-version = "2.0.1"
-description = "asyncio (PEP 3156) Redis support"
-optional = false
-python-versions = ">=3.6"
-groups = ["dev"]
-files = [
-    {file = "aioredis-2.0.1-py3-none-any.whl", hash = "sha256:9ac0d0b3b485d293b8ca1987e6de8658d7dafcca1cddfcd1d506cae8cdebfdd6"},
-    {file = "aioredis-2.0.1.tar.gz", hash = "sha256:eaa51aaf993f2d71f54b70527c440437ba65340588afeb786cd87c55c89cd98e"},
-]
-
-[package.dependencies]
-async-timeout = "*"
-typing-extensions = "*"
-
-[package.extras]
-hiredis = ["hiredis (>=1.0)"]
-
-[[package]]
 name = "annotated-types"
 version = "0.7.0"
 description = "Reusable constraint types to use with typing.Annotated"
@@ -72,7 +53,8 @@ version = "5.0.1"
 description = "Timeout context manager for asyncio programs"
 optional = false
 python-versions = ">=3.8"
-groups = ["dev"]
+groups = ["main", "dev"]
+markers = "python_full_version < \"3.11.3\""
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -1530,6 +1512,25 @@ files = [
 cffi = {version = "*", markers = "implementation_name == \"pypy\""}
 
 [[package]]
+name = "redis"
+version = "5.2.1"
+description = "Python client for Redis database and key-value store"
+optional = false
+python-versions = ">=3.8"
+groups = ["main", "dev"]
+files = [
+    {file = "redis-5.2.1-py3-none-any.whl", hash = "sha256:ee7e1056b9aea0f04c6c2ed59452947f34c4940ee025f5dd83e6a6418b6989e4"},
+    {file = "redis-5.2.1.tar.gz", hash = "sha256:16f2e22dff21d5125e8481515e386711a34cbec50f0e44413dd7d9c060a54e0f"},
+]
+
+[package.dependencies]
+async-timeout = {version = ">=4.0.3", markers = "python_full_version < \"3.11.3\""}
+
+[package.extras]
+hiredis = ["hiredis (>=3.0.0)"]
+ocsp = ["cryptography (>=36.0.1)", "pyopenssl (==23.2.1)", "requests (>=2.31.0)"]
+
+[[package]]
 name = "ruff"
 version = "0.5.7"
 description = "An extremely fast Python linter and code formatter, written in Rust."
@@ -1651,6 +1652,22 @@ files = [
 [package.dependencies]
 fastapi = ">=0.93.0"
 taskiq = ">=0.8.0,<1"
+
+[[package]]
+name = "taskiq-redis"
+version = "1.0.2"
+description = "Redis integration for taskiq"
+optional = false
+python-versions = "<4.0.0,>=3.8.1"
+groups = ["main", "dev"]
+files = [
+    {file = "taskiq_redis-1.0.2-py3-none-any.whl", hash = "sha256:d24c4ba34560eb882af351ec34eab4fc90ff6b82ef9b3245d0a499d335b92086"},
+    {file = "taskiq_redis-1.0.2.tar.gz", hash = "sha256:9a8e8b8e26847e25fbe6e6f8f910632a66f3d38bb5249699193efcfd1e84e25f"},
+]
+
+[package.dependencies]
+redis = ">=5,<6"
+taskiq = ">=0.11.1,<1"
 
 [[package]]
 name = "tomli"
@@ -2243,4 +2260,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">3.9.1,<4"
-content-hash = "28528229ea2a6e5dbbb5a90dba0a763003bfbb50fe21505dbb0a631902ab2aea"
+content-hash = "1481a89e958a33ef27622a642d9266a9fa92c012304c3590bcf8230ab96220e9"

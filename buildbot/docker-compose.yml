@@ -1,0 +1,39 @@
+services:
+  api:
+    build: &build
+      context: .
+      dockerfile: ./Dockerfile
+    image: &image buildbot:${BUILDBOT_VERSION:-latest}
+    restart: &restart always
+    env_file: &env_file
+      - .env
+    networks:
+      - front-end-network
+      - back-end-network
+    ports:
+      - 8000:8000
+    volumes:
+      - buildbot_data:/app/data:ro
+
+  taskiq-worker:
+    build: *build
+    image: *image
+    restart: *restart
+    env_file: *env_file
+    volumes:
+      - buildbot_data:/app/data:rw
+    networks:
+      - back-end-network
+    command:
+      - taskiq
+      - worker
+      - app.tkq:broker
+
+volumes:
+  buildbot_data:
+
+networks:
+  front-end-network:
+    driver: bridge
+  back-end-network:
+    driver: bridge
