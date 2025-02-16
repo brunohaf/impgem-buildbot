@@ -18,7 +18,7 @@ class LogLevel(str, enum.Enum):
 class RedisSettings(BaseSettings):
     """Redis settings."""
 
-    host: str = "redis://localhost"
+    host: str = "localhost"
     port: int = 6379
 
     def get_url(self) -> str:
@@ -28,7 +28,7 @@ class RedisSettings(BaseSettings):
 class BuildBotJobSettings(BaseSettings):
     """BuildBotJob settings."""
 
-    base_workdir: Path = "/var/lib/app/buildbot/workdir"
+    base_workdir: Path = "/app/workdir"
 
 
 class Settings(BaseSettings):

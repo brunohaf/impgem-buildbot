@@ -4,8 +4,8 @@ from app.api.task.schema import (
     UpdateTaskResponse,
 )
 from app.core.exceptions import TaskNotFoundError
+from app.services.task import TaskService
 from app.services.task.schema import TaskDTO
-from app.services.task.service import TaskService
 from fastapi import APIRouter, Depends, HTTPException
 
 router = APIRouter()

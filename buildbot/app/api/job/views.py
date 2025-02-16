@@ -3,12 +3,14 @@ from pathlib import Path
 from app.api.job.schema import CreateJobResponse, GetJobStatusResponse
 from app.core.exceptions import (
     JobCreationError,
+    JobFailedError,
     JobNotCompletedError,
     JobNotFoundError,
     JobOutputAccessDeniedError,
+    TaskNotFoundError,
 )
+from app.services.job import JobService
 from app.services.job.schema import JobDTO
-from app.services.job.service import JobService
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -28,9 +30,9 @@ async def create_job(
     """
     try:
         job_id = await job_svc.create(job_request)
+        return CreateJobResponse(job_id=job_id)
     except JobCreationError as e:
         raise HTTPException(status_code=400) from e
-    return CreateJobResponse(job_id=job_id)
 
 
 @router.get("/{job_id}/status", tags=["job"])
@@ -75,7 +77,7 @@ async def get_job_output(
         ) from e
     except JobNotCompletedError as e:
         raise HTTPException(status_code=409) from e
-    except JobNotCompletedError as e:
+    except JobFailedError as e:
         raise HTTPException(
             status_code=410,
             detail="Cannot retrieve the output. Job failed due to internal error",
@@ -84,3 +86,5 @@ async def get_job_output(
         raise HTTPException(
             status_code=404,
         ) from e
+    except TaskNotFoundError as e:
+        raise HTTPException(status_code=404, detail="Task not found") from e

@@ -48,6 +48,17 @@ class JobCreationError(BaseError):
         return f"Could not create Job. {self.__cause__!s}."
 
 
+class JobSchedulingError(BaseError):
+    """Error raised when a Job cannot be scheduled."""
+
+    def __init__(self, *args: object) -> None:
+        self.message = self._format_message()
+        super().__init__(self.message, *args)
+
+    def _format_message(self) -> str:
+        return "Could not schedule the Job."
+
+
 class JobNotCompletedError(BaseError):
     """Error raised when a Job has not completed."""
 

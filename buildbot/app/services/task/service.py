@@ -78,6 +78,14 @@ class TaskService(TaskQueryService):
         return task
 
 
+task_service: TaskService = TaskService()
+
+
 def get_task_service() -> TaskService:
     """Returns a TaskService instance."""
-    return TaskService()
+    return task_service
+
+
+def get_task_query_service() -> TaskQueryService:
+    """Returns a TaskService instance."""
+    return task_service

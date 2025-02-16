@@ -7,17 +7,18 @@ from app.core.exceptions import (
     JobNotCompletedError,
     JobNotFoundError,
     JobOutputAccessDeniedError,
-    TaskNotFoundError,
+    JobSchedulingError,
 )
 from app.core.settings import settings
 from app.repository.job.repository import JobRepository, get_job_repository
 from app.repository.job.schemas import Job, JobStatus
 from app.services.job.schema import JobDTO
-from app.services.task.service import TaskQueryService, get_task_service
 from fastapi import Depends
 from loguru import logger
 
-from buildbot.app.background.job_manager import JobManager, get_job_manager
+from buildbot.app.background import job_manager
+from buildbot.app.repository.task.schemas import Task
+from buildbot.app.services.task.service import TaskService
 
 base_workdir: Path = settings.buildbot_job.base_workdir.resolve()
 
@@ -28,19 +29,11 @@ class JobService:
     def __init__(
         self,
         job_repo: JobRepository = Depends(get_job_repository),
-        job_manager: JobManager = Depends(get_job_manager),
-        task_svc: TaskQueryService = Depends(get_task_service),
+        task_svc: TaskService = Depends(),
     ) -> None:
         self._logger = logger
         self._job_repo = job_repo
-        self._job_manager = job_manager
         self._task_svc = task_svc
-
-    async def _check_task_exists(self, task_id: str) -> None:
-        try:
-            _ = await self._task_svc.get(task_id)
-        except TaskNotFoundError as e:
-            raise JobCreationError(task_id) from e
 
     async def create(self, job_dto: JobDTO) -> str:
         """
@@ -51,15 +44,13 @@ class JobService:
         :raises JobCreationError: If the Job cannot be created
         :raises UnexpectedException: If an unexpected error occurs
         """
-        await self._check_task_exists(job_dto.task_id)
-        try:
-            job = Job(task_id=job_dto.task_id, env_vars=job_dto.env_vars)
-            await self._job_repo.create(job)
-            await self._job_repo.associate_job_with_task(job.id, job.task_id)
-            self._job_manager.run_job_in_container.send(job)
-            return job.id
-        except Exception as e:
-            raise JobCreationError from e
+        task = await self._task_svc.get(job_dto.task_id)
+        if not task:
+            raise JobCreationError(job_dto.task_id)
+        job = Job(task_id=job_dto.task_id, env_vars=job_dto.env_vars)
+        job_id = await self._job_repo.create(job)
+        await self._schedule_job(job, task)
+        return job_id
 
     async def get_status(self, job_id: str) -> JobStatus:
         """
@@ -101,7 +92,17 @@ class JobService:
         async with aiofiles.open(target, "rb") as f:
             return BytesIO(await f.read())
 
+    async def _schedule_job(self, job: Job, task: Task) -> None:
+        try:
+            await job_manager.run_job_in_container.kiq(
+                job.id,
+                task.script,
+                job.env_vars,
+            )
+        except Exception as e:
+            raise JobSchedulingError from e
 
-def get_job_service() -> JobService:
-    """Get a JobService instance."""
+
+async def get_job_service() -> JobService:
+    """Get the JobService."""
     return JobService()

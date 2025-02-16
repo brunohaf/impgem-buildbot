@@ -31,20 +31,22 @@ class TaskRedisRepository(TaskRepository, BaseRedisRepository):
 
     async def update(self, new_task: Task) -> Optional[str]:
         """Updates an existing task in Redis."""
-        task_data = await self._redis.get(new_task.id)
+        task_key = self._get_key(new_task.id)
+        task_data = await self._redis.get(task_key)
         if task_data is None:
             self._logger.warning(
                 f"Failed to update Task(id={new_task.id}). Not found",
             )
             return None
 
-        updated_task_data = Task.model_validate(
+        updated_task = Task.model_validate(
             {
-                **Task.model_validate_json(task_data),
+                **Task.model_validate_json(task_data).model_dump(exclude_unset=True),
                 **new_task.model_dump(exclude_unset=True),
-            }.model_dump_json(),
+            },
         )
-        await self._redis.set(new_task.id, updated_task_data)
+
+        await self._redis.set(task_key, updated_task.model_dump_json())
         return new_task.id
 
     async def delete(self, id: str) -> None:

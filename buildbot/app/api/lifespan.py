@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from app.services.broker import broker
+from app.background.broker import broker
 from fastapi import FastAPI
 
 
