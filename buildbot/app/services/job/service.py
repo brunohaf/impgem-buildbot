@@ -8,6 +8,7 @@ from app.core.exceptions import (
     JobNotFoundError,
     JobOutputAccessDeniedError,
     JobSchedulingError,
+    TaskNotFoundError,
 )
 from app.core.settings import settings
 from app.repository.job.repository import JobRepository, get_job_repository
@@ -16,7 +17,7 @@ from app.services.job.schema import JobDTO
 from fastapi import Depends
 from loguru import logger
 
-from buildbot.app.background import job_manager
+from buildbot.app.background import broker
 from buildbot.app.repository.task.schemas import Task
 from buildbot.app.services.task.service import TaskService
 
@@ -44,13 +45,14 @@ class JobService:
         :raises JobCreationError: If the Job cannot be created
         :raises UnexpectedException: If an unexpected error occurs
         """
-        task = await self._task_svc.get(job_dto.task_id)
-        if not task:
-            raise JobCreationError(job_dto.task_id)
-        job = Job(task_id=job_dto.task_id, env_vars=job_dto.env_vars)
-        job_id = await self._job_repo.create(job)
-        await self._schedule_job(job, task)
-        return job_id
+        try:
+            task = await self._task_svc.get(job_dto.task_id)
+            job = Job(task_id=job_dto.task_id, env_vars=job_dto.env_vars)
+            job_id = await self._job_repo.create(job)
+            await self._schedule_job(job, task)
+            return job_id
+        except TaskNotFoundError as e:
+            raise JobCreationError(job_dto.task_id) from e
 
     async def get_status(self, job_id: str) -> JobStatus:
         """
@@ -94,7 +96,7 @@ class JobService:
 
     async def _schedule_job(self, job: Job, task: Task) -> None:
         try:
-            await job_manager.run_job_in_container.kiq(
+            await broker.run_job.kiq(
                 job.id,
                 task.script,
                 job.env_vars,

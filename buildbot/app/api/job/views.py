@@ -32,7 +32,7 @@ async def create_job(
         job_id = await job_svc.create(job_request)
         return CreateJobResponse(job_id=job_id)
     except JobCreationError as e:
-        raise HTTPException(status_code=400) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/{job_id}/status", tags=["job"])
@@ -51,7 +51,7 @@ async def get_job_status(
         job_status = await job_svc.get_status(job_id)
         return GetJobStatusResponse(status=job_status)
     except JobNotFoundError as e:
-        raise HTTPException(status_code=404) from e
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/{job_id}/output/{file_path:path}", tags=["job"])
@@ -85,6 +85,7 @@ async def get_job_output(
     except JobNotFoundError as e:
         raise HTTPException(
             status_code=404,
+            detail=str(e),
         ) from e
     except TaskNotFoundError as e:
         raise HTTPException(status_code=404, detail="Task not found") from e

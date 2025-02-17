@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from app.background.broker import broker
+from app.background.broker import broker, scheduler
 from fastapi import FastAPI
+from loguru import logger
 
 
 @asynccontextmanager
@@ -10,20 +11,26 @@ async def lifespan_setup(
     app: FastAPI,
 ) -> AsyncGenerator[None, None]:  # pragma: no cover
     """
-    Actions to run on application startup.
+    Actions to run on application startup and shutdown.
 
-    This function uses fastAPI app to store data
-    in the state, such as db_engine.
+    This function initializes required services on startup
+    and ensures cleanup on shutdown.
 
-    :param app: the fastAPI application.
-    :return: function that actually performs actions.
+    :param app: the FastAPI application.
+    :return: Async generator for the app lifespan.
     """
 
     app.middleware_stack = None
-    if not broker.is_worker_process:
-        await broker.startup()
-    app.middleware_stack = app.build_middleware_stack()
+    try:
+        if not broker.is_worker_process:
+            await broker.startup()
+            await scheduler.startup()
+            logger.info(f"Scheduled tasks: {scheduler.sources}")
+        app.middleware_stack = app.build_middleware_stack()
 
-    yield
-    if not broker.is_worker_process:
-        await broker.shutdown()
+        yield
+
+    finally:
+        if not broker.is_worker_process:
+            await scheduler.shutdown()
+            await broker.shutdown()

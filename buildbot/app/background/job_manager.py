@@ -2,61 +2,66 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from pathlib import Path
 
 import aiofiles
 import loguru
 from app.core.settings import settings
+from app.repository.job.repository import JobRepository, get_job_repository
+from app.repository.job.schemas import JobStatus
 from docker import DockerClient
 from docker import from_env as get_docker_client_from_env
+from docker.errors import ImageNotFound
 from docker.models.containers import Container
+from docker.models.images import Image
 
-from buildbot.app.background.broker import broker
-from buildbot.app.repository.job.repository import JobRepository, get_job_repository
-from buildbot.app.repository.job.schemas import JobStatus
-
-BASE_WORKDIR: Path = settings.buildbot_job.base_workdir.resolve()
-STORAGE_DIR: Path = Path.cwd() / "buildbot" / "app" / "background" / "outputs"
+WORKDIR: Path = settings.buildbot_job.base_workdir.resolve()
+STORAGE_DIR: Path = Path.cwd() / "buildbot" / "data"
+IMAGE_TAG: str = "buildbot-job-runner:latest"
 DOCKERFILE: Path = Path.cwd() / "buildbot" / "app" / "background"
-RUNNER_TAG: str = "jobrunner"
-RUNNER_USER: str = "jobrunner"
-RUNNER_GROUP: str = "jobrunner"
-PERSISTENT_VOLUME: str = "buildbot_data"
-OUTPUT_DIR = BASE_WORKDIR / "outputs"
 TIME_TO_CHECK_CONTAINER_STATUS: timedelta = timedelta(minutes=2)
-
+SCRIPT_TIMEOUT: str = "5m"
 
 _client: DockerClient = get_docker_client_from_env()
 _job_repo: JobRepository = get_job_repository()
 _logger: loguru.Logger = loguru.logger
 
 
-@broker.task
-async def run_job_in_container(job_id: str, script: str, env_vars: dict) -> str:
-    """Runs a Task in a Docker container asynchronously."""
-    workdir = BASE_WORKDIR / job_id
-    script = f"#!/bin/sh\n{script}\nexit 0"
-    script_file = workdir / "script.sh"
-    command = [
-        f'echo -e "{script}" > {script_file} && chmod +x script.sh && ./script.sh',
-    ]
-
+def _get_image() -> Image:
     try:
-        image, _ = _client.images.build(
-            tag=f"{RUNNER_TAG}:job-{job_id}",
+        return _client.images.get(IMAGE_TAG)
+    except ImageNotFound:
+        image, buildlogs = _client.images.build(
+            tag=IMAGE_TAG,
             path=str(DOCKERFILE),
             buildargs={
-                "RUNNER_USER": RUNNER_USER,
-                "RUNNER_GROUP": RUNNER_GROUP,
-                "WORKDIR": str(workdir),
+                "WORKDIR": str(WORKDIR),
             },
-            labels={"job_id": job_id},
         )
+
+        for line in buildlogs:
+            _logger.info(line)
+        return image
+
+
+async def run_job_in_container(job_id: str, script: str, env_vars: dict) -> str:
+    """Runs a Task in a Docker container asynchronously."""
+    try:
+        command = (
+            '"cat <<EOF > run.sh'
+            f"\n{script}"
+            "\nEOF"
+            "\nchmod +x run.sh"
+            f"\ntimeout {SCRIPT_TIMEOUT}"
+            ' ./run.sh"'
+        )
+        image = _get_image()
         container = _client.containers.run(
             image=image,
             command=command,
-            hostname=f"task-runner-{job_id}",
+            hostname=job_id,
             environment=env_vars,
             network_mode="none",
             detach=True,
@@ -64,20 +69,15 @@ async def run_job_in_container(job_id: str, script: str, env_vars: dict) -> str:
             security_opt=["no-new-privileges"],
             stderr=True,
             stdout=True,
+            labels={"job_id": job_id},
         )
-
-        for log_line in container.logs(stream=True, follow=True):
-            print(log_line.decode("utf-8"), end="")
-
+        await asyncio.sleep(4)
         await _save_outputs(container, job_id)
         return job_id, container
     except Exception as e:
         raise e
-    finally:
-        _client.images.remove(image.id, force=True)
 
 
-@broker.task(schedule=[{"cron": "*/5 * * * *"}])
 async def check_container_status() -> None:
     """Pings for the containers status every X minutes."""
     containers = _client.containers
@@ -101,6 +101,7 @@ async def check_container_status() -> None:
                 )
                 await _save_outputs(container, job_id)
             _client.containers.prune()
+            _client.images.remove(container.image.id, force=True)
 
 
 async def _save_outputs(
@@ -109,7 +110,7 @@ async def _save_outputs(
 ) -> None:
     """Asynchronously gets a file from a Docker container and saves it locally."""
 
-    stream, _ = container.get_archive(str(BASE_WORKDIR / job_id))
+    stream, _ = container.get_archive(str(WORKDIR))
 
     Path(STORAGE_DIR).parent.mkdir(parents=True, exist_ok=True)
     async with aiofiles.open(STORAGE_DIR / f"{job_id}.tar.gz", "wb") as f:

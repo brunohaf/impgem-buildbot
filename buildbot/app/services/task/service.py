@@ -40,7 +40,7 @@ class TaskService(TaskQueryService):
         :raises TaskCreationError: If the Task cannot be created
         """
         try:
-            task = Task(script=task_dto.script)
+            task = Task(script=self._sanitize_bash_script(task_dto.script))
             await self._task_repo.create(task)
             return task.id
         except Exception as e:
@@ -76,6 +76,13 @@ class TaskService(TaskQueryService):
         if not task:
             raise TaskNotFoundError(task_id)
         return task
+
+    def _sanitize_bash_script(self, script: str) -> str:
+        """Sanitizes a bash script."""
+        shebang = "#!/bin/sh"
+        if not script.startswith(shebang):
+            script = f"{shebang}\n{script}"
+        return script
 
 
 task_service: TaskService = TaskService()
