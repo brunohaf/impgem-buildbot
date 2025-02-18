@@ -106,7 +106,7 @@ class JobService:
 
     async def _schedule_job(self, job: Job, task: Task) -> None:
         try:
-            await broker.run_job.kiq(
+            await broker.process.kiq(
                 job.id,
                 task.script,
                 job.env_vars,

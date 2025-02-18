@@ -6,18 +6,20 @@ from pathlib import Path
 from typing import Dict
 
 import loguru
-from app.background.job.container.utils import get_docker_client
-from app.background.job.manager import JobArtifactHandler
-from app.background.job.utils import get_tar_filename
+from app.background.job_manager.container.utils import get_docker_client
+from app.background.job_manager.utils import get_tar_filename
 from app.core.settings import settings
 from app.services.storage import get_storage_service
+from docker import DockerClient
+
+from buildbot.app.background.job_manager.manager_base import JobArtifactHandler
 
 
 class ContainerArtifactHandler(JobArtifactHandler):
     """Handles the management of Jobs running in Docker containers and their artifacts."""
 
-    def __init__(self) -> None:
-        self._client = get_docker_client()
+    def __init__(self, docker_client: DockerClient = None) -> None:
+        self._client = docker_client or get_docker_client()
         self._logger = loguru.logger.bind(artifact_handler=type(self))
         self._storage = get_storage_service()
 
@@ -48,7 +50,7 @@ class ContainerArtifactHandler(JobArtifactHandler):
             raise
 
     # ? Webhook per job_id for realtime logs
-    async def handle_logs(self, logs: Dict[str, StringIO], job_id: str) -> None:
+    async def handle_outputs(self, logs: Dict[str, StringIO], job_id: str) -> None:
         """Handles the Job logs."""
         try:
             logs_path = Path(

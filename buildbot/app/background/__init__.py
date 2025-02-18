@@ -1,3 +1,3 @@
-# from app.background.broker import broker, scheduler
+from buildbot.app.background.job_manager.manager_base import JobManager
 
-# __all__ = ["broker", "scheduler"]
+__all__ = ["JobManager"]

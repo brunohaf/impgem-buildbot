@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 import asyncio
 from io import StringIO
 from typing import Dict
 
 import loguru
-from app.background.job.container.handler import ContainerArtifactHandler
-from app.background.job.container.runner import ContainerRunner
-from app.background.job.container.utils import ContainerStatus as Status
-from app.background.job.container.utils import Labels
-from app.background.job.manager import JobManager
-from app.background.job.utils import JobOutput, OutputType
+from app.background.job_manager.container.handler import ContainerArtifactHandler
+from app.background.job_manager.container.runner import ContainerRunner
+from app.background.job_manager.container.utils import ContainerStatus as Status
+from app.background.job_manager.container.utils import Labels, get_docker_client
+from app.background.job_manager.utils import JobOutput, OutputType
 from app.core import settings
 from app.repository.job.repository import get_job_repository
 from app.repository.job.schemas import JobStatus
 from docker.models.containers import Container
 from loguru import logger
+
+from buildbot.app.background.job_manager.manager_base import JobManager
 
 
 class ContainerManager(JobManager):
@@ -21,14 +24,16 @@ class ContainerManager(JobManager):
 
     def __init__(self) -> None:
         self._logger = logger.bind(job_manager=type(self))
-        self._handler = ContainerArtifactHandler()
-        self._runner = ContainerRunner()
+        self._client = get_docker_client()
+        self._handler = ContainerArtifactHandler(self._client)
+        self._runner = ContainerRunner(self._client)
         self._job_repo = get_job_repository()
 
     async def process(self, job_id: str, script: str, env_vars: Dict[str, str]) -> None:
         """Processes the Jobs."""
         self._logger.info(f"Processing job '{job_id}'.")
         await self._runner.run(job_id, script, env_vars)
+        await self._job_repo.update_status(job_id, JobStatus.RUNNING)
         self._logger.info(f"Job '{job_id}' processed successfully.")
 
     async def manage_jobs(self) -> None:
@@ -45,7 +50,7 @@ class ContainerManager(JobManager):
                 if container.status == Status.RUNNING:
                     job_logger.info(f"Container '{container.name}' is still running.")
                 else:
-                    self._handle_container_termination(
+                    await self._handle_container_termination(
                         job_id=job_id,
                         job_logger=job_logger,
                         container=container,
@@ -60,24 +65,27 @@ class ContainerManager(JobManager):
         job_logger: loguru.Logger,
     ) -> None:
         """Handles the termination of a container, updating job status and saving outputs."""
-        exit_code = container.attrs["State"]["ExitCode"]
-        job_logger.info(
-            f"Container '{container.name}' stopped with exit code {exit_code}.",
-        )
-        logs = self._get_container_logs(container)
-        if exit_code != 0:
-            self._handle_errors(logs, job_id, job_logger)
-        else:
-            job_logger.info(f"Job '{job_id}' completed successfully.")
-            await self._job_repo.update_status(job_id, JobStatus.SUCCEEDED)
+        try:
+            exit_code = container.attrs["State"]["ExitCode"]
+            job_logger.info(
+                f"Container '{container.name}' stopped with exit code {exit_code}.",
+            )
+            logs = self._get_container_logs(container)
+            if exit_code != 0:
+                self._handle_errors(logs, job_id, job_logger)
+            else:
+                job_logger.info(f"Job '{job_id}' completed successfully.")
+                await self._job_repo.update_status(job_id, JobStatus.SUCCEEDED)
 
-        tar_stream, _ = container.get_archive(str(settings.job_manager.workdir))
-        await asyncio.gather(
-            self._handler.save_artifact(job_id, tar_stream),
-            self._handler.handle_outputs(JobOutput(job_id, **logs)),
-        )
+            tar_stream, _ = container.get_archive(str(settings.job_manager.workdir))
+            await asyncio.gather(
+                self._handler.save_artifact(job_id, tar_stream),
+                self._handler.handle_outputs(JobOutput(job_id, **logs)),
+            )
 
-        container.remove(force=True)
+            container.remove(force=True)
+        except Exception as e:
+            job_logger.error(f"Error handling container termination: {e}")
 
     def _get_container_logs(self, container: Container) -> Dict[str, StringIO]:
         return {
@@ -94,3 +102,8 @@ class ContainerManager(JobManager):
         stderr = stderr_stream.getvalue().decode("utf-8")
         job_logger.error(f"Job '{job_id}' failed. Logs: {stderr}")
         await self._job_repo.update_status(job_id, JobStatus.FAILED)
+
+
+def get_container_manager() -> ContainerManager:
+    """Returns a ContainerManager instance."""
+    return ContainerManager()

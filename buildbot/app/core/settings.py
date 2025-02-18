@@ -1,4 +1,5 @@
 import enum
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.core.enums import JobArtifactStorage
@@ -27,14 +28,62 @@ class RedisSettings(BaseSettings):
         return f"redis://{self.host}:{self.port}/0"
 
 
+class ContainerJobManagerSettings(BaseSettings):
+    """Container Job Manager settings."""
+
+    """Docker Client Host"""
+    host: str = "localhost"
+
+    """Docker Client Port"""
+    port: int = 2375
+
+    """Docker Image Tag"""
+    tag: str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+    @property
+    def command_template(self) -> str:
+        """Returns a Docker command template."""
+        return (
+            '"cat <<EOF > run.sh'
+            "\n{script}"
+            "\nEOF"
+            "\nchmod +x run.sh"
+            "\ntimeout {timeout}s"
+            ' ./run.sh && rm run.sh"'
+        )
+
+    @property
+    def config(self) -> dict:
+        """Returns a Docker container configuration."""
+        return {
+            "network_mode": "none",
+            "detach": True,
+            "cap_drop": ["ALL"],
+            "security_opt": ["no-new-privileges"],
+            "stderr": True,
+            "stdout": True,
+        }
+
+    @property
+    def image_config(self) -> dict:
+        """Returns a Docker image configuration."""
+        dockerfile = (
+            Path.cwd() / "buildbot" / "app" / "background" / "job_manager" / "container"
+        )
+        return {
+            "tag": f"buildbot/runner:{self.tag}",
+            "path": str(dockerfile),
+        }
+
+
 class JobManagerSettings(BaseSettings):
     """BuildBotJob settings."""
 
     """Job Base Workdir"""
     workdir: Path = "/workdir"
 
-    """Job Handler Schedule"""
-    handler_schedule: str = "*/3 * * * *"
+    """Job Manager Schedule"""
+    manager_schedule: str = "*/3 * * * *"
 
     """Job Maximum Time to Live in Seconds"""
     job_ttl: int = 300
@@ -48,6 +97,8 @@ class JobManagerSettings(BaseSettings):
     """Job Artifact Path Templates"""
     artifact_path_template: str = "{job_id}/artifact_{filename}"
     log_path_template: str = "{job_id}/logs/{filename}"
+
+    container: ContainerJobManagerSettings = ContainerJobManagerSettings()
 
 
 class LocalStorageSettings(BaseSettings):

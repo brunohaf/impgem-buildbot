@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import Dict
 
-from app.background.job.utils import JobOutput
+from app.background.job_manager.utils import JobOutput
 from app.repository.job.repository import JobRepository
 from app.services.storage import StorageService
 

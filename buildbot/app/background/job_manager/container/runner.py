@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-import docker
 import loguru
-from app.background.job.container.utils import Constants
-from app.background.job.manager import JobRunner
+from app.background.job_manager.container.utils import Labels, get_docker_client
+from app.background.job_manager.manager_base import JobRunner
+from app.core.settings import settings
+from docker import DockerClient
 from docker.errors import ImageNotFound
 from docker.models.images import Image
 
-from buildbot.app.core.settings import settings
+_container_settings = settings.job_manager.container
 
 
 class ContainerRunner(JobRunner):
     """Runs Jobs in Docker containers asynchronously."""
 
-    def __init__(self) -> None:
-        self._client = docker.from_env()
+    def __init__(self, docker_client: DockerClient = None) -> None:
+        self._client = docker_client or get_docker_client()
         self._logger = loguru.logger.bind(job_runner=type(self))
 
     async def run(self, job_id: str, script: str, env_vars: dict) -> str:
@@ -28,13 +29,8 @@ class ContainerRunner(JobRunner):
                 command=self._format_docker_command(script),
                 hostname=job_id,
                 environment=env_vars,
-                network_mode="none",
-                detach=True,
-                cap_drop=["ALL"],
-                security_opt=["no-new-privileges"],
-                stderr=True,
-                stdout=True,
-                labels={Constants.Labels.JOB_ID: job_id},
+                labels={Labels.JOB_ID: job_id},
+                **_container_settings.config,
             )
             return job_id
         except Exception as e:
@@ -44,30 +40,23 @@ class ContainerRunner(JobRunner):
     def _get_image(self) -> Image:
         try:
             self._logger.info("Checking for existing Docker image.")
-            return self._client.images.get(settings.job_manager.image_tag)
+            return self._client.images.get(_container_settings.tag)
         except ImageNotFound:
             self._logger.warning("Image not found. Building new image.")
             try:
-                image, buildlogs = self._client.images.build(
-                    tag=settings.job_manager.image_tag,
-                    path=str(settings.job_manager.dockerfile),
-                    buildargs={
-                        "WORKDIR": str(settings.job_manager.workdir),
-                    },
+                image, build_logs = self._client.images.build(
+                    buildargs={"WORKDIR": str(settings.job_manager.workdir)},
+                    **_container_settings.image_config,
                 )
-                for line in buildlogs:
+                for line in build_logs:
                     self._logger.debug(f"Build log: {line}")
                 return image
             except Exception as e:
                 self._logger.error(f"Error building image: {e}")
                 raise
 
-    def _format_docker_command(self, script_content: str) -> list[str]:
-        return (
-            '"cat <<EOF > run.sh'
-            f"\n{script_content}"
-            "\nEOF"
-            "\nchmod +x run.sh"
-            f"\ntimeout {settings.job_manager.timeout}"
-            ' ./run.sh && rm run.sh"'
+    def _format_docker_command(self, script: str) -> list[str]:
+        return _container_settings.command_template.format(
+            script=script,
+            timeout=settings.job_manager.job_ttl,
         )
