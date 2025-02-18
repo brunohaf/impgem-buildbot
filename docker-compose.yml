@@ -13,7 +13,7 @@ services:
     ports:
       - 8000:8000
     volumes:
-      - buildbot_data:/app/data:ro
+      - buildbot_data:/data:ro
 
   redis:
     image: redis
@@ -22,19 +22,33 @@ services:
     networks:
       - back-end-network
 
-  taskiq-worker:
+  job-worker:
     build: *build
     image: *image
     restart: *restart
     env_file: *env_file
     volumes:
-      - buildbot_data:/app/data:rw
+      - buildbot_data:/data:rw
     networks:
       - back-end-network
     command:
       - taskiq
       - worker
-      - app.background:broker
+      - app.background.broker:broker
+
+  job-output-worker:
+    build: *build
+    image: *image
+    restart: *restart
+    env_file: *env_file
+    volumes:
+      - buildbot_data:/data:rw
+    networks:
+      - back-end-network
+    command:
+      - taskiq
+      - scheduler
+      - app.background.broker:scheduler
 
 volumes:
   buildbot_data:

@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from app.background.broker import broker, scheduler
+from app.background.broker import broker
 from fastapi import FastAPI
-from loguru import logger
 
 
 @asynccontextmanager
@@ -24,13 +23,10 @@ async def lifespan_setup(
     try:
         if not broker.is_worker_process:
             await broker.startup()
-            await scheduler.startup()
-            logger.info(f"Scheduled tasks: {scheduler.sources}")
         app.middleware_stack = app.build_middleware_stack()
 
         yield
 
     finally:
         if not broker.is_worker_process:
-            await scheduler.shutdown()
             await broker.shutdown()

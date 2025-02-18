@@ -1,6 +1,7 @@
 import enum
 from pathlib import Path
 
+from app.core.enums import JobArtifactStorage
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,13 +23,37 @@ class RedisSettings(BaseSettings):
     port: int = 6379
 
     def get_url(self) -> str:
+        """Returns a Redis URL."""
         return f"redis://{self.host}:{self.port}/0"
 
 
-class BuildBotJobSettings(BaseSettings):
+class JobManagerSettings(BaseSettings):
     """BuildBotJob settings."""
 
-    base_workdir: Path = "/app/workdir"
+    """Job Base Workdir"""
+    workdir: Path = "/workdir"
+
+    """Job Handler Schedule"""
+    handler_schedule: str = "*/3 * * * *"
+
+    """Job Maximum Time to Live in Seconds"""
+    job_ttl: int = 300
+
+    """Job Artifact Storage"""
+    artifact_storage: JobArtifactStorage = JobArtifactStorage.TAR_GZ
+
+    """Concurrent Jobs"""
+    concurrent_jobs: int = 10
+
+    """Job Artifact Path Templates"""
+    artifact_path_template: str = "{job_id}/artifact_{filename}"
+    log_path_template: str = "{job_id}/logs/{filename}"
+
+
+class LocalStorageSettings(BaseSettings):
+    """LocalStorage settings."""
+
+    volume_path: Path = (Path.cwd() / "data").resolve()
 
 
 class Settings(BaseSettings):
@@ -49,7 +74,7 @@ class Settings(BaseSettings):
     # Current environment
     environment: str = "dev"
 
-    log_level: LogLevel = LogLevel.INFO
+    log_level: LogLevel = LogLevel.DEBUG
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -58,7 +83,8 @@ class Settings(BaseSettings):
     )
 
     redis: RedisSettings = RedisSettings()
-    buildbot_job: BuildBotJobSettings = BuildBotJobSettings()
+    job_manager: JobManagerSettings = JobManagerSettings()
+    local_storage: LocalStorageSettings = LocalStorageSettings()
 
 
 settings = Settings()

@@ -1,5 +1,8 @@
 """Job service module."""
 
-from app.services.job.service import JobService
+from app.services.job.service import JobService, get_job_service
 
-__all__ = ["JobService"]
+__all__ = [
+    "get_job_service",
+    "JobService",
+]

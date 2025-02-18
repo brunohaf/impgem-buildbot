@@ -92,6 +92,20 @@ class JobOutputAccessDeniedError(BaseError):
         return f"The path '{path}' is not on the Job(id={job_id}) directory."
 
 
+class JobOutputNotFoundError(BaseError):
+    """Error raised when the requested Job Output is not found."""
+
+    def __init__(self, job_id: str, *args: object) -> None:
+        self.message = self._format_message(job_id)
+        super().__init__(self.message, *args)
+
+    def _format_message(self, job_id: str, path: Path) -> str:
+        return (
+            f"No such file or directory. The path '{path}'"
+            f" was not found on the Job(id={job_id}) directory."
+        )
+
+
 class TaskNotFoundError(BaseError):
     """Error raised when a Task is not found."""
 

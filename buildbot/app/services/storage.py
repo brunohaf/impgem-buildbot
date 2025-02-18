@@ -1,0 +1,121 @@
+import tarfile
+from abc import ABC, abstractmethod
+from io import BytesIO
+from pathlib import Path
+from typing import Generator, Union
+
+import aiofiles
+from app.core.settings import settings
+from app.core.utils import AbstractSingletonMeta
+from loguru import logger
+
+
+class StorageService(ABC):
+    """Interface for Object Storage Services such as S3, Azure Blob Storage, etc."""
+
+    @abstractmethod
+    async def upload(self, file_path: str, stream: BytesIO) -> str:
+        """Uploads a file to the storage service."""
+
+    @abstractmethod
+    async def download(self, file_path: str) -> BytesIO:
+        """Downloads a file from the storage service."""
+
+    @abstractmethod
+    async def exists(self, file_path: str) -> None:
+        """Checks if a file exists in the storage service."""
+
+
+class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
+    """A local file storage service."""
+
+    def __init__(self) -> None:
+        self._logger = logger
+        self._volume = settings.local_storage.volume_path
+
+    async def upload(
+        self,
+        file_path: Path,
+        stream: Union[BytesIO, Generator[bytes, None, None]],
+    ) -> str:
+        """Uploads a file to the local storage."""
+        try:
+            full_path = self._volume / file_path
+            self._logger.info(f"Uploading '{full_path}' to local storage.")
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(full_path, "wb") as f:
+                if isinstance(stream, BytesIO):
+                    while chunk := stream.read(4096):
+                        await f.write(chunk)
+                elif isinstance(stream, Generator):
+                    for chunk in stream:
+                        await f.write(chunk)
+                else:
+                    raise ValueError(
+                        "Stream must be either BytesIO or Generator",
+                    )
+            self._logger.info(f"File '{file_path}' uploaded to local storage.")
+            return str(full_path)
+
+        except Exception as e:
+            self._logger.error(f"Error uploading file: {e}")
+            raise e
+
+    async def download(self, file_path: Path) -> BytesIO:
+        """Downloads a file from the local storage."""
+        self._raise_if_not_exists(file_path)
+        async with aiofiles.open(file_path, "rb") as f:
+            return BytesIO(await f.read())
+
+    def exists(self, file_path: Path) -> None:
+        """Checks if a file exists in the local storage."""
+        return (self._volume / file_path).exists()
+
+    def _raise_if_not_exists(self, file_path: Path) -> None:
+        if not self.exists(file_path):
+            raise FileNotFoundError(f"File {file_path} not found")
+
+
+class TarStorageService(LocalStorageService):
+    """A service for handling tar.gz files specifically."""
+
+    #! WIP
+    async def download(self, tar_file_path: str, requested_path: str) -> BytesIO:
+        """Downloads a specific file or folder from a tar.gz archive."""
+        tar_file_path = Path(tar_file_path)
+        requested_path = requested_path.lstrip("/")  # Normalize path
+
+        self._raise_if_not_exists(tar_file_path)
+
+        with tarfile.open(tar_file_path, "r:gz") as tar:
+            # Check if the requested path is a file or folder
+            members = [
+                member
+                for member in tar.getmembers()
+                if member.name.startswith(requested_path)
+            ]
+
+            if not members:
+                raise FileNotFoundError(
+                    f"Path {requested_path} not found in {tar_file_path}",
+                )
+
+            # If it's a directory, create a tarball of the folder
+            if any(member.isdir() for member in members):
+                file_content = BytesIO()
+                with tarfile.open(fileobj=file_content, mode="w:gz") as temp_tar:
+                    for member in members:
+                        temp_tar.addfile(member, tar.extractfile(member))
+                file_content.seek(0)
+                return file_content
+
+            # If it's a file, just return the content of the file
+            member = members[0]
+            file_content = BytesIO(tar.extractfile(member).read())
+            file_content.seek(0)
+            return file_content
+
+
+def get_storage_service() -> StorageService:
+    """Returns the storage service."""
+    return TarStorageService()
