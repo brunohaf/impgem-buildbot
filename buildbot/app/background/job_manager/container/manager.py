@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from io import StringIO
+from io import BytesIO
 from typing import Dict
 
 import loguru
@@ -9,8 +9,8 @@ from app.background.job_manager.container.handler import ContainerArtifactHandle
 from app.background.job_manager.container.runner import ContainerRunner
 from app.background.job_manager.container.utils import ContainerStatus as Status
 from app.background.job_manager.container.utils import Labels, get_docker_client
-from app.background.job_manager.utils import JobOutput, OutputType
-from app.core import settings
+from app.background.job_manager.utils import JobOutput
+from app.core.settings import settings
 from app.repository.job.repository import get_job_repository
 from app.repository.job.schemas import JobStatus
 from docker.models.containers import Container
@@ -70,9 +70,9 @@ class ContainerManager(JobManager):
             job_logger.info(
                 f"Container '{container.name}' stopped with exit code {exit_code}.",
             )
-            logs = self._get_container_logs(container)
+            logs = self._get_container_logs(container, job_id)
             if exit_code != 0:
-                self._handle_errors(logs, job_id, job_logger)
+                await self._handle_errors(logs.stderr, job_id, job_logger)
             else:
                 job_logger.info(f"Job '{job_id}' completed successfully.")
                 await self._job_repo.update_status(job_id, JobStatus.SUCCEEDED)
@@ -80,27 +80,30 @@ class ContainerManager(JobManager):
             tar_stream, _ = container.get_archive(str(settings.job_manager.workdir))
             await asyncio.gather(
                 self._handler.save_artifact(job_id, tar_stream),
-                self._handler.handle_outputs(JobOutput(job_id, **logs)),
+                self._handler.handle_outputs(logs),
             )
 
             container.remove(force=True)
         except Exception as e:
             job_logger.error(f"Error handling container termination: {e}")
+            raise
 
-    def _get_container_logs(self, container: Container) -> Dict[str, StringIO]:
-        return {
-            OutputType.STDOUT: StringIO(container.logs(stdout=True, stderr=False)),
-            OutputType.STDERR: StringIO(container.logs(stdout=False, stderr=True)),
-        }
+    def _get_container_logs(self, container: Container, job_id: str) -> JobOutput:
+        return JobOutput(
+            job_id=job_id,
+            stderr=container.logs(stdout=False, stderr=True),
+            stdout=container.logs(stdout=True, stderr=False),
+        )
 
     async def _handle_errors(
         self,
-        stderr_stream: StringIO,
+        stderr: BytesIO,
         job_id: str,
         job_logger: loguru.Logger,
     ) -> None:
-        stderr = stderr_stream.getvalue().decode("utf-8")
-        job_logger.error(f"Job '{job_id}' failed. Logs: {stderr}")
+        stderr.seek(0)
+        stderr_str = stderr.getvalue().decode("utf-8", errors="replace")
+        job_logger.error(f"Job '{job_id}' failed. Logs: {stderr_str}")
         await self._job_repo.update_status(job_id, JobStatus.FAILED)
 
 

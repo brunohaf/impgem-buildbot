@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 import tarfile
-from io import BytesIO, StringIO
+from io import BytesIO
 from pathlib import Path
-from typing import Dict
 
 import loguru
 from app.background.job_manager.container.utils import get_docker_client
-from app.background.job_manager.utils import get_tar_filename
+from app.background.job_manager.manager_base import JobArtifactHandler
+from app.background.job_manager.utils import JobOutput, get_tar_filename
 from app.core.settings import settings
 from app.services.storage import get_storage_service
 from docker import DockerClient
-
-from buildbot.app.background.job_manager.manager_base import JobArtifactHandler
 
 
 class ContainerArtifactHandler(JobArtifactHandler):
@@ -34,7 +32,7 @@ class ContainerArtifactHandler(JobArtifactHandler):
             job_logger.info(f"Saving outputs for job '{job_id}'.")
 
             artifact_path = Path(
-                settings.job_manager.logs_path_template.format(
+                settings.job_manager.artifact_path_template.format(
                     job_id=job_id,
                     filename=get_tar_filename(),
                 ),
@@ -49,26 +47,40 @@ class ContainerArtifactHandler(JobArtifactHandler):
             job_logger.error(f"Error saving artifacts for job '{job_id}': {e}")
             raise
 
-    # ? Webhook per job_id for realtime logs
-    async def handle_outputs(self, logs: Dict[str, StringIO], job_id: str) -> None:
+    # ? Docker-Py Outputs can be read in real time because
+    # ? containers.log will return a bytes generator when stream==True
+    # ? It would be possible to use it in a webhook endpoint per job_id
+    # ? for realtime logs.
+    async def handle_outputs(self, job_output: JobOutput) -> None:
         """Handles the Job logs."""
         try:
             logs_path = Path(
-                settings.job_manager.logs_path_template.format(
-                    job_id=job_id,
+                settings.job_manager.log_path_template.format(
+                    job_id=job_output.job_id,
                     filename=get_tar_filename(),
                 ),
             )
 
-            tar_stream = BytesIO()
-            with tarfile.open(fileobj=tar_stream, mode="w:gz") as tar:
-                for log_name, log_content in logs.items():
-                    log_data = log_content.getvalue()
-                    info = tarfile.TarInfo(name=log_name)
-                    info.size = len(log_data)
-                    tar.addfile(info, BytesIO(log_data))
-
-                await self._storage.upload(logs_path, tar_stream)
+            tar_stream = self._build_log_tar_stream(job_output)
+            await self._storage.upload(logs_path, tar_stream)
 
         except Exception as e:
             self._logger.error(f"Error saving logs: {e}")
+            raise
+
+    def _build_log_tar_stream(self, job_output: JobOutput) -> BytesIO:
+        """Builds a tar stream for the Job outputs."""
+        tar_stream = BytesIO()
+        with tarfile.open(fileobj=tar_stream, mode="w:gz") as tar:
+            for log_name, log_data in [
+                ("stderr.log", job_output.stderr),
+                ("stdout.log", job_output.stdout),
+            ]:
+                info = tarfile.TarInfo(name=log_name)
+                log_data.seek(0)
+                log_data_size = len(log_data.getvalue())
+                info.size = log_data_size
+                tar.addfile(info, log_data)
+
+        tar_stream.seek(0)
+        return tar_stream

@@ -2,7 +2,6 @@ import tarfile
 from abc import ABC, abstractmethod
 from io import BytesIO
 from pathlib import Path
-from typing import Generator, Union
 
 import aiofiles
 from app.core.settings import settings
@@ -36,7 +35,7 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
     async def upload(
         self,
         file_path: Path,
-        stream: Union[BytesIO, Generator[bytes, None, None]],
+        stream: BytesIO,
     ) -> str:
         """Uploads a file to the local storage."""
         try:
@@ -44,16 +43,8 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
             self._logger.info(f"Uploading '{full_path}' to local storage.")
             full_path.parent.mkdir(parents=True, exist_ok=True)
             async with aiofiles.open(full_path, "wb") as f:
-                if isinstance(stream, BytesIO):
-                    while chunk := stream.read(4096):
-                        await f.write(chunk)
-                elif isinstance(stream, Generator):
-                    for chunk in stream:
-                        await f.write(chunk)
-                else:
-                    raise ValueError(
-                        "Stream must be either BytesIO or Generator",
-                    )
+                while chunk := stream.read(4096):
+                    await f.write(chunk)
             self._logger.info(f"File '{file_path}' uploaded to local storage.")
             return str(full_path)
 

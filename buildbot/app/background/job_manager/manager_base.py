@@ -17,7 +17,7 @@ class JobArtifactHandler(ABC):
         """Handles the Job Artifact."""
 
     @abstractmethod
-    async def handle_outputs(self, job_id: str, job_output: JobOutput) -> None:
+    async def handle_outputs(self, job_output: JobOutput) -> None:
         """Handles the Job outputs."""
 
 

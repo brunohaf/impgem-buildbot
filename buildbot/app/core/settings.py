@@ -83,7 +83,7 @@ class JobManagerSettings(BaseSettings):
     workdir: Path = "/workdir"
 
     """Job Manager Schedule"""
-    manager_schedule: str = "*/3 * * * *"
+    manager_schedule: str = "*/1 * * * *"
 
     """Job Maximum Time to Live in Seconds"""
     job_ttl: int = 300
