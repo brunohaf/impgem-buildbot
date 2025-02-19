@@ -79,8 +79,8 @@ class TaskService(TaskQueryService):
 
     def _sanitize_bash_script(self, script: str) -> str:
         """Sanitizes a bash script."""
-        shebang = "#!/bin/sh"
-        if not script.startswith(shebang):
+        shebang = "#!/bin/bash"
+        if not script.startswith((shebang, "#!/bin/sh")):
             script = f"{shebang}\n{script}"
         return script
 

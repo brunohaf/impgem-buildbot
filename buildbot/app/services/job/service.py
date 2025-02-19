@@ -89,7 +89,7 @@ class JobService:
         if job.status != JobStatus.SUCCEEDED:
             if job.status == JobStatus.FAILED:
                 raise Job(job_id)
-            raise JobFailedError(job_id, job.status)  #! return the stderr on failure
+            raise JobFailedError(job_id, job.status)
 
         return await self._get_job_output(job_id, file_path)
 

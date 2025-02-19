@@ -23,10 +23,14 @@ class ContainerRunner(JobRunner):
         try:
             job_logger = self._logger.bind(job_id=job_id)
             job_logger.info(f"Running job '{job_id}' in Docker container.")
+            command = _container_settings.get_command(
+                script,
+                settings.job_manager.job_ttl,
+            )
             _ = self._client.containers.run(
                 name=f"buildbotjob-{job_id}",
                 image=self._get_image(),
-                command=self._format_docker_command(script),
+                command=command,
                 hostname=job_id,
                 environment=env_vars,
                 labels={Labels.JOB_ID: job_id},

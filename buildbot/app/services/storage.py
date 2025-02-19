@@ -2,6 +2,7 @@ import tarfile
 from abc import ABC, abstractmethod
 from io import BytesIO
 from pathlib import Path
+from typing import Generator, Union
 
 import aiofiles
 from app.core.settings import settings
@@ -13,7 +14,11 @@ class StorageService(ABC):
     """Interface for Object Storage Services such as S3, Azure Blob Storage, etc."""
 
     @abstractmethod
-    async def upload(self, file_path: str, stream: BytesIO) -> str:
+    async def upload(
+        self,
+        file_path: str,
+        stream: Union[bytes, BytesIO, Generator[bytes, None, None]],
+    ) -> str:
         """Uploads a file to the storage service."""
 
     @abstractmethod
@@ -35,21 +40,29 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
     async def upload(
         self,
         file_path: Path,
-        stream: BytesIO,
+        stream: Union[bytes, BytesIO, Generator[bytes, None, None]],
     ) -> str:
-        """Uploads a file to the local storage."""
+        """Uploads a file to the local storage, supporting bytes, BytesIO, and generators of bytes."""
         try:
             full_path = self._volume / file_path
             self._logger.info(f"Uploading '{full_path}' to local storage.")
             full_path.parent.mkdir(parents=True, exist_ok=True)
+
             async with aiofiles.open(full_path, "wb") as f:
-                while chunk := stream.read(4096):
-                    await f.write(chunk)
+                if isinstance(stream, bytes):
+                    await f.write(stream)
+                elif isinstance(stream, BytesIO):
+                    while chunk := stream.read(4096):
+                        await f.write(chunk)
+                else:
+                    for chunk in stream:
+                        await f.write(chunk)
+
             self._logger.info(f"File '{file_path}' uploaded to local storage.")
             return str(full_path)
 
         except Exception as e:
-            self._logger.error(f"Error uploading file: {e}")
+            self._logger.error(f"Error uploading file: {e}", exc_info=True)
             raise e
 
     async def download(self, file_path: Path) -> BytesIO:

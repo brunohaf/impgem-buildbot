@@ -1,3 +1,4 @@
+import base64
 import enum
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,17 +32,18 @@ class RedisSettings(BaseSettings):
 class ContainerJobManagerSettings(BaseSettings):
     """Container Job Manager settings."""
 
-    """Docker Client Host"""
-    host: str = "localhost"
+    class DockerClientSettings(BaseSettings):
+        docker_host: str = "localhost"
+        docker_tls_verify: bool = False
+        docker_cert_path: str = ""
 
-    """Docker Client Port"""
-    port: int = 2375
+    docker_settings: DockerClientSettings = DockerClientSettings()
 
     """Docker Image Tag"""
     tag: str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
     @property
-    def command_template(self) -> str:
+    def command_template2(self) -> str:
         """Returns a Docker command template."""
         return (
             '"cat <<EOF > run.sh'
@@ -49,7 +51,16 @@ class ContainerJobManagerSettings(BaseSettings):
             "\nEOF"
             "\nchmod +x run.sh"
             "\ntimeout {timeout}s"
-            ' ./run.sh && rm run.sh"'
+            ' ./run.sh"'
+        )
+
+    def get_command(self, script: str, timeout: int) -> str:
+        """Generates a Docker command, encodes the script, sets a timeout and deletes run.sh."""
+        encoded_script = base64.b64encode(script.encode()).decode()
+
+        return (
+            f'"echo {encoded_script} | base64 -d > run.sh && chmod +x run.sh && '
+            f'timeout {timeout}s ./run.sh; rm -f run.sh"'
         )
 
     @property
