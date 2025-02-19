@@ -68,8 +68,7 @@ async def get_job_output(
     :return: The contents of the file
     """
     try:
-        job_output = await job_svc.get_output(job_id, path)
-        return StreamingResponse(content=job_output)
+        return await job_svc.get_output(job_id, path)
     except JobOutputAccessDeniedError as e:
         raise HTTPException(
             status_code=403,

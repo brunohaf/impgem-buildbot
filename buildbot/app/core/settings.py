@@ -78,9 +78,7 @@ class ContainerJobManagerSettings(BaseSettings):
     @property
     def image_config(self) -> dict:
         """Returns a Docker image configuration."""
-        dockerfile = (
-            Path.cwd() / "buildbot" / "app" / "background" / "job_manager" / "container"
-        )
+        dockerfile = Path.cwd() / "app" / "background" / "job_manager" / "container"
         return {
             "tag": f"buildbot/runner:{self.tag}",
             "path": str(dockerfile),
@@ -106,7 +104,7 @@ class JobManagerSettings(BaseSettings):
     concurrent_jobs: int = 10
 
     """Job Artifact Path Templates"""
-    artifact_path_template: str = "{job_id}/artifact_{filename}"
+    artifact_path_template: str = "{job_id}/artifact{file_extension}"
     log_path_template: str = "{job_id}/logs/{filename}"
 
     container: ContainerJobManagerSettings = ContainerJobManagerSettings()
@@ -115,7 +113,7 @@ class JobManagerSettings(BaseSettings):
 class LocalStorageSettings(BaseSettings):
     """LocalStorage settings."""
 
-    volume_path: Path = (Path.cwd() / "buildbot" / "data").resolve()
+    volume_path: Path = (Path.cwd() / "data").resolve()
 
 
 class Settings(BaseSettings):

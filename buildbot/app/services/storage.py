@@ -9,6 +9,8 @@ from app.core.settings import settings
 from app.core.utils import AbstractSingletonMeta
 from loguru import logger
 
+_CHUNK_SIZE = 1024 * 1024
+
 
 class StorageService(ABC):
     """Interface for Object Storage Services such as S3, Azure Blob Storage, etc."""
@@ -22,8 +24,12 @@ class StorageService(ABC):
         """Uploads a file to the storage service."""
 
     @abstractmethod
-    async def download(self, job_id: str, file_path: Path) -> BytesIO:
-        """Downloads a file from the storage service."""
+    async def download(
+        self,
+        job_id: str,
+        file_path: Path,
+    ) -> Union[bytes, BytesIO, Generator[bytes, None, None]]:
+        """Downloads a file as a .tar.gz from the storage service."""
 
     @abstractmethod
     async def exists(self, job_id: str, file_path: Path) -> None:
@@ -45,14 +51,16 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
         """Uploads a file to the local storage, supporting bytes, BytesIO, and generators of bytes."""
         try:
             full_path = self._volume / file_path
+
             self._logger.info(f"Uploading '{full_path}' to local storage.")
+
             full_path.parent.mkdir(parents=True, exist_ok=True)
 
             async with aiofiles.open(full_path, "wb") as f:
                 if isinstance(stream, bytes):
                     await f.write(stream)
                 elif isinstance(stream, BytesIO):
-                    while chunk := stream.read(4096):
+                    while chunk := stream.read(_CHUNK_SIZE):
                         await f.write(chunk)
                 else:
                     for chunk in stream:
@@ -65,37 +73,57 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
             self._logger.error(f"Error uploading file: {e}", exc_info=True)
             raise e
 
-    async def download(self, job_id: str, file_path: Path) -> BytesIO:
+    async def download(
+        self,
+        job_id: str,
+        file_path: Path,
+    ) -> BytesIO:
         """Downloads a file from the local storage."""
-        self._raise_if_not_exists(file_path)
+        self._raise_if_not_exists(job_id / file_path)
         async with aiofiles.open(file_path, "rb") as f:
             return BytesIO(await f.read())
 
     def exists(self, file_path: Path) -> None:
         """Checks if a file exists in the local storage."""
-        return (self._volume / file_path).exists()
+        return (self._volume / file_path).resolve().exists()
 
     def _raise_if_not_exists(self, file_path: Path) -> None:
         if not self.exists(file_path):
             raise FileNotFoundError(f"File {file_path} not found")
 
+    def _get_tar_stream(self, file_content: bytes, filename: str) -> BytesIO:
+        tar_stream = BytesIO()
+        with tarfile.open(fileobj=tar_stream, mode="w:gz") as tar:
+            tar_info = tarfile.TarInfo(name=filename)
+            tar_info.size = len(file_content)
+            tar.addfile(tar_info, BytesIO(file_content))
+        tar_stream.seek(0)
+        return tar_stream
+
 
 class TarStorageService(LocalStorageService):
-    """A service for handling tar.gz files specifically."""
+    """A service for handling local tar.gz artifacts."""
 
-    def download(self, job_id: str, file_path: Path) -> BytesIO:
-        """Checks if a file exists within the artifact path and returns its content as a BytesIO stream."""
+    def download(
+        self,
+        job_id: str,
+        file_path: Path,
+    ) -> BytesIO:
+        """Downloads a file from the local storage."""
         artifact_path = self._volume / job_id / "artifact.tar.gz"
+        workdir_name = str(settings.job_manager.workdir.name)
+
         self._raise_if_not_exists(Path(job_id))
-        with Path.open(artifact_path, "rb") as f:
-            tar_buffer = BytesIO(f.read())
-        with tarfile.open(fileobj=tar_buffer, mode="r:gz") as tar:
+
+        with tarfile.open(artifact_path, mode="r:*") as tar:
             for member in tar.getmembers():
-                if member.name.startswith(settings.job_manager.workdir):
-                    member.name = member.name[len(settings.job_manager.workdir) :]
-                if member.name == str(file_path):
-                    file_content = tar.extractfile(member).read()
-                    return BytesIO(file_content)
+                member_path = Path(member.path).relative_to(workdir_name)
+                if member_path == file_path:
+                    return self._get_tar_stream(
+                        tar.extractfile(member).read(),
+                        member_path.name,
+                    )
+
         raise FileNotFoundError(f"File {file_path} not found.")
 
 

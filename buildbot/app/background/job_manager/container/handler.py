@@ -34,7 +34,7 @@ class ContainerArtifactHandler(JobArtifactHandler):
             artifact_path = Path(
                 settings.job_manager.artifact_path_template.format(
                     job_id=job_id,
-                    filename="artifact.tar.gz",
+                    file_extension=".tar.gz",
                 ),
             )
 

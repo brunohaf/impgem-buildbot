@@ -10,18 +10,15 @@ from app.core.exceptions import (
     JobSchedulingError,
     TaskNotFoundError,
 )
-from app.core.settings import settings
 from app.repository.job.repository import JobRepository, get_job_repository
 from app.repository.job.schemas import Job, JobStatus
 from app.repository.task.schemas import Task
 from app.services.job.schema import JobDTO
+from app.services.storage import StorageService, get_storage_service
 from app.services.task.service import TaskService
 from fastapi import Depends
+from fastapi.responses import StreamingResponse
 from loguru import logger
-
-from buildbot.app.services.storage import StorageService, get_storage_service
-
-_workdir: Path = settings.job_manager.workdir.resolve()
 
 
 class JobService:
@@ -69,7 +66,7 @@ class JobService:
             raise JobNotFoundError(job_id)
         return job.status
 
-    async def get_output(self, job_id: str, file_path: str) -> BytesIO:
+    async def get_output(self, job_id: str, file_path: str) -> StreamingResponse:
         """
         Retrieve a file from a Job's output.
 
@@ -90,15 +87,20 @@ class JobService:
                 raise Job(job_id)
             raise JobFailedError(job_id, job.status)
 
-        return await self._get_job_output(job_id, file_path)
+        tar_stream = self._get_job_output(job_id, file_path)
+        return StreamingResponse(
+            tar_stream,
+            media_type="application/gzip",
+            headers={"Content-Disposition": f"attachment; filename={job_id}.tar.gz"},
+        )
 
-    async def _get_job_output(self, job_id: str, file_path: Path) -> BytesIO:
-        target = Path(file_path).resolve()
+    def _get_job_output(self, job_id: str, file_path: Path) -> BytesIO:
+        target = Path(file_path)
 
         if not self._storage_svc.exists(Path(job_id)):
             raise JobOutputAccessDeniedError(job_id, file_path)
 
-        return await self._storage_svc.download(job_id, target)
+        return self._storage_svc.download(Path(job_id), target)
 
     async def _schedule_job(self, job: Job, task: Task) -> None:
         try:
