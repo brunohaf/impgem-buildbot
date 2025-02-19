@@ -9,14 +9,13 @@ from app.background.job_manager.container.handler import ContainerArtifactHandle
 from app.background.job_manager.container.runner import ContainerRunner
 from app.background.job_manager.container.utils import ContainerStatus as Status
 from app.background.job_manager.container.utils import Labels, get_docker_client
+from app.background.job_manager.manager_base import JobManager
 from app.background.job_manager.utils import JobOutput
 from app.core.settings import settings
 from app.repository.job.repository import get_job_repository
 from app.repository.job.schemas import JobStatus
 from docker.models.containers import Container
 from loguru import logger
-
-from buildbot.app.background.job_manager.manager_base import JobManager
 
 
 class ContainerManager(JobManager):
@@ -78,7 +77,7 @@ class ContainerManager(JobManager):
                 await self._job_repo.update_status(job_id, JobStatus.SUCCEEDED)
 
             tar_stream, _ = container.get_archive(
-                str(settings.job_manager.workdir) + "/"
+                str(settings.job_manager.workdir) + "/",
             )
             await asyncio.gather(
                 self._handler.save_artifact(job_id, tar_stream),

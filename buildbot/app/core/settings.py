@@ -113,6 +113,7 @@ class JobManagerSettings(BaseSettings):
 class LocalStorageSettings(BaseSettings):
     """LocalStorage settings."""
 
+    artifact_volume: str = "storage"
     volume_path: Path = (Path.cwd() / "data").resolve()
 
 
