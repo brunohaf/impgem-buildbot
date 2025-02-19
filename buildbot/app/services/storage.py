@@ -22,11 +22,11 @@ class StorageService(ABC):
         """Uploads a file to the storage service."""
 
     @abstractmethod
-    async def download(self, file_path: str) -> BytesIO:
+    async def download(self, job_id: str, file_path: Path) -> BytesIO:
         """Downloads a file from the storage service."""
 
     @abstractmethod
-    async def exists(self, file_path: str) -> None:
+    async def exists(self, job_id: str, file_path: Path) -> None:
         """Checks if a file exists in the storage service."""
 
 
@@ -65,7 +65,7 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
             self._logger.error(f"Error uploading file: {e}", exc_info=True)
             raise e
 
-    async def download(self, file_path: Path) -> BytesIO:
+    async def download(self, job_id: str, file_path: Path) -> BytesIO:
         """Downloads a file from the local storage."""
         self._raise_if_not_exists(file_path)
         async with aiofiles.open(file_path, "rb") as f:
@@ -83,41 +83,20 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
 class TarStorageService(LocalStorageService):
     """A service for handling tar.gz files specifically."""
 
-    #! WIP
-    async def download(self, tar_file_path: str, requested_path: str) -> BytesIO:
-        """Downloads a specific file or folder from a tar.gz archive."""
-        tar_file_path = Path(tar_file_path)
-        requested_path = requested_path.lstrip("/")  # Normalize path
-
-        self._raise_if_not_exists(tar_file_path)
-
-        with tarfile.open(tar_file_path, "r:gz") as tar:
-            # Check if the requested path is a file or folder
-            members = [
-                member
-                for member in tar.getmembers()
-                if member.name.startswith(requested_path)
-            ]
-
-            if not members:
-                raise FileNotFoundError(
-                    f"Path {requested_path} not found in {tar_file_path}",
-                )
-
-            # If it's a directory, create a tarball of the folder
-            if any(member.isdir() for member in members):
-                file_content = BytesIO()
-                with tarfile.open(fileobj=file_content, mode="w:gz") as temp_tar:
-                    for member in members:
-                        temp_tar.addfile(member, tar.extractfile(member))
-                file_content.seek(0)
-                return file_content
-
-            # If it's a file, just return the content of the file
-            member = members[0]
-            file_content = BytesIO(tar.extractfile(member).read())
-            file_content.seek(0)
-            return file_content
+    def download(self, job_id: str, file_path: Path) -> BytesIO:
+        """Checks if a file exists within the artifact path and returns its content as a BytesIO stream."""
+        artifact_path = self._volume / job_id / "artifact.tar.gz"
+        self._raise_if_not_exists(Path(job_id))
+        with Path.open(artifact_path, "rb") as f:
+            tar_buffer = BytesIO(f.read())
+        with tarfile.open(fileobj=tar_buffer, mode="r:gz") as tar:
+            for member in tar.getmembers():
+                if member.name.startswith(settings.job_manager.workdir):
+                    member.name = member.name[len(settings.job_manager.workdir) :]
+                if member.name == str(file_path):
+                    file_content = tar.extractfile(member).read()
+                    return BytesIO(file_content)
+        raise FileNotFoundError(f"File {file_path} not found.")
 
 
 def get_storage_service() -> StorageService:

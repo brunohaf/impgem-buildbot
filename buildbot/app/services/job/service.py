@@ -7,7 +7,6 @@ from app.core.exceptions import (
     JobFailedError,
     JobNotFoundError,
     JobOutputAccessDeniedError,
-    JobOutputNotFoundError,
     JobSchedulingError,
     TaskNotFoundError,
 )
@@ -96,13 +95,10 @@ class JobService:
     async def _get_job_output(self, job_id: str, file_path: Path) -> BytesIO:
         target = Path(file_path).resolve()
 
-        if not self._storage_svc.exists(file_path):
-            raise JobOutputNotFoundError(job_id, file_path)
-
-        if not target.is_relative_to(self._volume / job_id):
+        if not self._storage_svc.exists(Path(job_id)):
             raise JobOutputAccessDeniedError(job_id, file_path)
 
-        return await self._storage_svc.download(target)
+        return await self._storage_svc.download(job_id, target)
 
     async def _schedule_job(self, job: Job, task: Task) -> None:
         try:

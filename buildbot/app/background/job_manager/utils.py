@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Generator, Optional, Union
 
@@ -34,13 +33,3 @@ class JobOutput:
                 buffer.write(chunk)
         buffer.seek(0)
         return buffer
-
-
-def get_filename() -> str:
-    """Returns the file name in the format YYYYMMDDHHMMSS as a string."""
-    return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
-
-
-def get_tar_filename() -> str:
-    """Returns the file name in the format YYYYMMDDHHMMSS.tar.gz as a string."""
-    return f"{get_filename()}.tar.gz"

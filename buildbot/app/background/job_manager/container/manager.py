@@ -77,7 +77,9 @@ class ContainerManager(JobManager):
                 job_logger.info(f"Job '{job_id}' completed successfully.")
                 await self._job_repo.update_status(job_id, JobStatus.SUCCEEDED)
 
-            tar_stream, _ = container.get_archive(str(settings.job_manager.workdir))
+            tar_stream, _ = container.get_archive(
+                str(settings.job_manager.workdir) + "/"
+            )
             await asyncio.gather(
                 self._handler.save_artifact(job_id, tar_stream),
                 self._handler.handle_outputs(logs),

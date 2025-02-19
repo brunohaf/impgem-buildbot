@@ -115,7 +115,7 @@ class JobManagerSettings(BaseSettings):
 class LocalStorageSettings(BaseSettings):
     """LocalStorage settings."""
 
-    volume_path: Path = (Path.cwd() / "data").resolve()
+    volume_path: Path = (Path.cwd() / "buildbot" / "data").resolve()
 
 
 class Settings(BaseSettings):

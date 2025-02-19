@@ -7,7 +7,7 @@ from pathlib import Path
 import loguru
 from app.background.job_manager.container.utils import get_docker_client
 from app.background.job_manager.manager_base import JobArtifactHandler
-from app.background.job_manager.utils import JobOutput, get_tar_filename
+from app.background.job_manager.utils import JobOutput
 from app.core.settings import settings
 from app.services.storage import get_storage_service
 from docker import DockerClient
@@ -34,7 +34,7 @@ class ContainerArtifactHandler(JobArtifactHandler):
             artifact_path = Path(
                 settings.job_manager.artifact_path_template.format(
                     job_id=job_id,
-                    filename=get_tar_filename(),
+                    filename="artifact.tar.gz",
                 ),
             )
 
@@ -57,7 +57,7 @@ class ContainerArtifactHandler(JobArtifactHandler):
             logs_path = Path(
                 settings.job_manager.log_path_template.format(
                     job_id=job_output.job_id,
-                    filename=get_tar_filename(),
+                    filename="logs.tar.gz",
                 ),
             )
 

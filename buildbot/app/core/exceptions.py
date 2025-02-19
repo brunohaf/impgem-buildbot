@@ -84,8 +84,8 @@ class JobFailedError(BaseError):
 class JobOutputAccessDeniedError(BaseError):
     """Error raised when the requested Job Output is forbidden."""
 
-    def __init__(self, job_id: str, *args: object) -> None:
-        self.message = self._format_message(job_id)
+    def __init__(self, job_id: str, path: Path, *args: object) -> None:
+        self.message = self._format_message(job_id, path)
         super().__init__(self.message, *args)
 
     def _format_message(self, job_id: str, path: Path) -> str:
