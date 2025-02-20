@@ -1,6 +1,6 @@
 from app.background.job_manager.container.manager import (
-    ContainerManager,
+    ContainerJobManager,
     get_container_manager,
 )
 
-__all__ = ["get_container_manager", "ContainerManager"]
+__all__ = ["get_container_manager", "ContainerJobManager"]

@@ -1,3 +1,5 @@
+from typing import List
+
 from app.api.task.schema import (
     CreateTaskResponse,
     GetTaskResponse,
@@ -6,12 +8,18 @@ from app.api.task.schema import (
 from app.core.exceptions import TaskNotFoundError
 from app.services.task import TaskService
 from app.services.task.schema import TaskDTO
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter()
 
+_tags: List[str] = ["task"]
 
-@router.post("/", response_model=CreateTaskResponse)
+
+@router.post(
+    "/",
+    response_model=CreateTaskResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_task(
     task: TaskDTO,
     task_svc: TaskService = Depends(),
@@ -26,7 +34,7 @@ async def create_task(
     return CreateTaskResponse(task_id=task_id)
 
 
-@router.get("/", response_model=GetTaskResponse)
+@router.get("/", response_model=GetTaskResponse, tags=_tags)
 async def get_task(
     task_id: str,
     task_svc: TaskService = Depends(),
@@ -42,10 +50,15 @@ async def get_task(
         task = await task_svc.get(task_id)
         return GetTaskResponse(script=task.script)
     except TaskNotFoundError as e:
-        raise HTTPException(status_code=404) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from e
 
 
-@router.put("/", response_model=UpdateTaskResponse)
+@router.put(
+    "/",
+    response_model=UpdateTaskResponse,
+    status_code=status.HTTP_200_OK,
+    tags=_tags,
+)
 async def update_task(
     task_id: str,
     task: TaskDTO,
@@ -63,4 +76,4 @@ async def update_task(
         task_id = await task_svc.update(task_id, task)
         return UpdateTaskResponse(task_id=task_id)
     except TaskNotFoundError as e:
-        raise HTTPException(status_code=404) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from e

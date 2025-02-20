@@ -1,8 +1,15 @@
-from enum import StrEnum, auto
+from enum import StrEnum
 
 
-class JobArtifactStorage(StrEnum):
-    """Enum for Job Artifact Storage types."""
+class JobManagerType(StrEnum):
+    """Job manager type."""
 
-    LOCAL = auto()
-    TAR_GZ = auto()
+    BASE = "base"
+    CONTAINER = "container"
+
+
+class Environment(StrEnum):
+    """BuildBot environment."""
+
+    PROD = "production"
+    DEV = "development"

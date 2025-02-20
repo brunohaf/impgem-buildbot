@@ -21,21 +21,14 @@ class JobArtifactHandler(ABC):
         """Handles the Job outputs."""
 
 
-class JobRunner(ABC):
-    """Job Runner interface."""
-
-    @abstractmethod
-    async def run(self, job_id: str, script: str, env_vars: Dict[str, str]) -> None:
-        """Runs a Job."""
-
-
 class JobManager(ABC):
     """Job Manager interface."""
 
     _handler: JobArtifactHandler
-    _runner: JobRunner
     _job_repo: JobRepository
 
     @abstractmethod
-    async def process(self, job_id: str, script: str, env_vars: Dict[str, str]) -> None:
+    async def manage_jobs(
+        self, job_id: str, script: str, env_vars: Dict[str, str]
+    ) -> None:
         """Processes a Job."""

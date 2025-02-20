@@ -96,4 +96,4 @@ class JobRedisRepository(JobRepository, BaseRedisRepository):
 # ? could streamline this for future implementations of JobRepository.
 def get_job_repository() -> JobRepository:
     """Returns the singleton JobRedisRepository."""
-    return JobRedisRepository.initialize(settings.redis.get_url())
+    return JobRedisRepository.initialize(settings.redis_settings.get_url())

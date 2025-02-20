@@ -1,17 +1,27 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from typing import Dict
+
 import loguru
-from app.background.job_manager.container.utils import Labels, get_docker_client
-from app.background.job_manager.manager_base import JobRunner
-from app.core.settings import settings
+from app.core.docker.utils import Labels, get_docker_client
+from app.core.settings import ContainerJobManagerSettings, settings
 from docker import DockerClient
 from docker.errors import ImageNotFound
 from docker.models.images import Image
 
-_container_settings = settings.job_manager.container
+_container_settings: ContainerJobManagerSettings = settings.job_manager_settings
 
 
-class ContainerRunner(JobRunner):
+class JobRunner(ABC):
+    """Job Runner interface."""
+
+    @abstractmethod
+    async def run(self, job_id: str, script: str, env_vars: Dict[str, str]) -> None:
+        """Runs a Job."""
+
+
+class ContainerJobRunner(JobRunner):
     """Runs Jobs in Docker containers asynchronously."""
 
     def __init__(self, docker_client: DockerClient = None) -> None:
@@ -25,7 +35,6 @@ class ContainerRunner(JobRunner):
             job_logger.info(f"Running job '{job_id}' in Docker container.")
             command = _container_settings.get_command(
                 script,
-                settings.job_manager.job_ttl,
             )
             _ = self._client.containers.run(
                 name=f"buildbotjob-{job_id}",
@@ -44,12 +53,11 @@ class ContainerRunner(JobRunner):
     def _get_image(self) -> Image:
         try:
             self._logger.info("Checking for existing Docker image.")
-            return self._client.images.get(_container_settings.tag)
+            return self._client.images.get(_container_settings.image_tag)
         except ImageNotFound:
             self._logger.warning("Image not found. Building new image.")
             try:
                 image, build_logs = self._client.images.build(
-                    buildargs={"WORKDIR": str(settings.job_manager.workdir)},
                     **_container_settings.image_config,
                 )
                 for line in build_logs:
@@ -59,8 +67,10 @@ class ContainerRunner(JobRunner):
                 self._logger.error(f"Error building image: {e}")
                 raise
 
-    def _format_docker_command(self, script: str) -> list[str]:
-        return _container_settings.command_template.format(
-            script=script,
-            timeout=settings.job_manager.job_ttl,
-        )
+
+_runner = ContainerJobRunner()
+
+
+def get_job_runner() -> JobRunner:
+    """Returns a JobRunner instance."""
+    return _runner

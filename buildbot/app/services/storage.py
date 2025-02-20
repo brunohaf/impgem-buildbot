@@ -5,11 +5,13 @@ from pathlib import Path
 from typing import Generator, Union
 
 import aiofiles
-from app.core.settings import settings
+from app.core.settings import JobManagerSettings, settings
 from app.core.utils import AbstractSingletonMeta
 from loguru import logger
 
 _CHUNK_SIZE = 1024 * 1024
+_job_manager_settings: JobManagerSettings = settings.job_manager_settings
+_artifact_path_template: str = _job_manager_settings.artifact_path_template
 
 
 class StorageService(ABC):
@@ -29,19 +31,26 @@ class StorageService(ABC):
         job_id: str,
         file_path: Path,
     ) -> Union[bytes, BytesIO, Generator[bytes, None, None]]:
-        """Downloads a file as a .tar.gz from the storage service."""
+        """
+        Downloads a file as a .tar.gz from the storage service..
+
+        :param job_id: The job ID.
+        :param file_path: The path to the file.
+        :return: A BytesIO object containing the file content.
+        :raises FileNotFoundError: If the file is not found.
+        """
 
     @abstractmethod
-    async def exists(self, job_id: str, file_path: Path) -> None:
+    async def exists(self, job_id: str, file_path: Path) -> bool:
         """Checks if a file exists in the storage service."""
 
 
 class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
-    """A local file storage service."""
+    """A service for handling local tar.gz artifacts."""
 
     def __init__(self) -> None:
         self._logger = logger
-        self._volume = settings.local_storage.volume_path
+        self._volume = settings.artifact_storage_settings.volume_path.resolve()
 
     async def upload(
         self,
@@ -51,7 +60,9 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
         """Uploads a file to the local storage, supporting bytes, BytesIO, and generators of bytes."""
         try:
             full_path = self._volume / file_path
-
+            self._logger.debug(
+                f"file_path='{file_path}', self._volume='{self._volume}'",
+            )
             self._logger.info(f"Uploading '{full_path}' to local storage.")
 
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,19 +84,40 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
             self._logger.error(f"Error uploading file: {e}", exc_info=True)
             raise e
 
-    async def download(
+    def exists(self, file_path: Path) -> bool:
+        """Checks if a file exists in the local storage."""
+        return (self._volume / file_path).exists()
+
+    def download(
         self,
         job_id: str,
         file_path: Path,
     ) -> BytesIO:
-        """Downloads a file from the local storage."""
-        self._raise_if_not_exists(job_id / file_path)
-        async with aiofiles.open(file_path, "rb") as f:
-            return BytesIO(await f.read())
+        """
+        Downloads a file from the local storage.
 
-    def exists(self, file_path: Path) -> None:
-        """Checks if a file exists in the local storage."""
-        return (self._volume / file_path).resolve().exists()
+        :param job_id: The job ID.
+        :param file_path: The path to the file.
+        :return: A BytesIO object containing the file content.
+        :raises FileNotFoundError: If the file is not found.
+        """
+        artifact_path = _artifact_path_template.format(job_id=job_id)
+
+        workdir = Path(_job_manager_settings.workdir)
+        workdir = workdir.relative_to("/") if workdir.is_absolute() else workdir
+
+        self._raise_if_not_exists(Path(job_id))
+
+        with tarfile.open(self._volume / artifact_path, mode="r:*") as tar:
+            for member in tar.getmembers():
+                member_path = Path(member.path).relative_to(workdir)
+                if member_path == file_path:
+                    return self._get_tar_stream(
+                        tar.extractfile(member).read(),
+                        member_path.name,
+                    )
+
+        raise FileNotFoundError(f"File {file_path} not found.")
 
     def _raise_if_not_exists(self, file_path: Path) -> None:
         if not self.exists(file_path):
@@ -101,32 +133,6 @@ class LocalStorageService(StorageService, metaclass=AbstractSingletonMeta):
         return tar_stream
 
 
-class TarStorageService(LocalStorageService):
-    """A service for handling local tar.gz artifacts."""
-
-    def download(
-        self,
-        job_id: str,
-        file_path: Path,
-    ) -> BytesIO:
-        """Downloads a file from the local storage."""
-        artifact_path = self._volume / job_id / "artifact.tar.gz"
-        workdir_name = str(settings.job_manager.workdir.name)
-
-        self._raise_if_not_exists(Path(job_id))
-
-        with tarfile.open(artifact_path, mode="r:*") as tar:
-            for member in tar.getmembers():
-                member_path = Path(member.path).relative_to(workdir_name)
-                if member_path == file_path:
-                    return self._get_tar_stream(
-                        tar.extractfile(member).read(),
-                        member_path.name,
-                    )
-
-        raise FileNotFoundError(f"File {file_path} not found.")
-
-
 def get_storage_service() -> StorageService:
     """Returns the storage service."""
-    return TarStorageService()
+    return LocalStorageService()

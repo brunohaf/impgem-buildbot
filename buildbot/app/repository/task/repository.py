@@ -57,4 +57,4 @@ class TaskRedisRepository(TaskRepository, BaseRedisRepository):
 # ? could streamline this for future implementations of TaskRepository.
 def get_task_repository() -> TaskRepository:
     """Returns the singleton TaskRedisRepository."""
-    return TaskRedisRepository.initialize(settings.redis.get_url())
+    return TaskRedisRepository.initialize(settings.redis_settings.get_url())

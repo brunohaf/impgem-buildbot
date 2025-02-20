@@ -5,15 +5,18 @@ from io import BytesIO
 from pathlib import Path
 
 import loguru
-from app.background.job_manager.container.utils import get_docker_client
 from app.background.job_manager.manager_base import JobArtifactHandler
 from app.background.job_manager.utils import JobOutput
+from app.core.docker.utils import get_docker_client
 from app.core.settings import settings
 from app.services.storage import get_storage_service
 from docker import DockerClient
 
+_artifact_path_template: str = settings.job_manager_settings.artifact_path_template
+_log_path_template: str = settings.job_manager_settings.log_path_template
 
-class ContainerArtifactHandler(JobArtifactHandler):
+
+class ContainerJobArtifactHandler(JobArtifactHandler):
     """Handles the management of Jobs running in Docker containers and their artifacts."""
 
     def __init__(self, docker_client: DockerClient = None) -> None:
@@ -32,9 +35,8 @@ class ContainerArtifactHandler(JobArtifactHandler):
             job_logger.info(f"Saving outputs for job '{job_id}'.")
 
             artifact_path = Path(
-                settings.job_manager.artifact_path_template.format(
+                _artifact_path_template.format(
                     job_id=job_id,
-                    file_extension=".tar.gz",
                 ),
             )
 
@@ -55,9 +57,8 @@ class ContainerArtifactHandler(JobArtifactHandler):
         """Handles the Job logs."""
         try:
             logs_path = Path(
-                settings.job_manager.log_path_template.format(
+                _log_path_template.format(
                     job_id=job_output.job_id,
-                    filename="logs.tar.gz",
                 ),
             )
 

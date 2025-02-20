@@ -2,8 +2,10 @@ import base64
 import enum
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Annotated, Any, Union
 
-from app.core.enums import JobArtifactStorage
+from app.core.enums import Environment, JobManagerType
+from pydantic import BaseModel, Discriminator, Tag
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,7 +20,7 @@ class LogLevel(str, enum.Enum):
     FATAL = "FATAL"
 
 
-class RedisSettings(BaseSettings):
+class RedisSettings(BaseModel):
     """Redis settings."""
 
     host: str = "localhost"
@@ -29,40 +31,52 @@ class RedisSettings(BaseSettings):
         return f"redis://{self.host}:{self.port}/0"
 
 
-class ContainerJobManagerSettings(BaseSettings):
+class JobManagerSettings(BaseModel):
+    """BuildBotJob settings."""
+
+    type: JobManagerType = JobManagerType.BASE
+
+    workdir: str = "workdir"
+    """Job Base Workdir"""
+
+    schedule: str = "*/1 * * * *"
+    """Job Manager Schedule"""
+
+    job_timeout: int = 300
+    """Job Maximum Time to Live in Seconds"""
+
+    concurrent_jobs: int = 10
+    """Concurrent Jobs"""
+
+    artifact_path_template: str = "{job_id}/artifact.tar.gz"
+    """Job Artifact Path Templates"""
+
+    log_path_template: str = "{job_id}/logs.tar.gz"
+    """Job Logs Path Templates"""
+
+    @staticmethod
+    def discriminator(v: Any) -> JobManagerType:
+        """Discriminator for job_manager_settings."""
+        if isinstance(v, dict):
+            return v.get("type")
+        if isinstance(v, JobManagerSettings):
+            return v.type
+        return None
+
+
+class ContainerJobManagerSettings(JobManagerSettings):
     """Container Job Manager settings."""
 
-    class DockerClientSettings(BaseSettings):
-        docker_host: str = "localhost"
-        docker_tls_verify: bool = False
-        docker_cert_path: str = ""
+    # ? Docker Image Tag
+    image_tag: str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
-    docker_settings: DockerClientSettings = DockerClientSettings()
+    # ? Dockerfile Directory Path
+    dockerfile_path: Path = Path("buildbot/app/background/job_manager/container")
 
-    """Docker Image Tag"""
-    tag: str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    # ? Script Path
+    _script_path: str = "run.sh"
 
-    @property
-    def command_template2(self) -> str:
-        """Returns a Docker command template."""
-        return (
-            '"cat <<EOF > run.sh'
-            "\n{script}"
-            "\nEOF"
-            "\nchmod +x run.sh"
-            "\ntimeout {timeout}s"
-            ' ./run.sh"'
-        )
-
-    def get_command(self, script: str, timeout: int) -> str:
-        """Generates a Docker command, encodes the script, sets a timeout and deletes run.sh."""
-        encoded_script = base64.b64encode(script.encode()).decode()
-
-        return (
-            f'"echo {encoded_script} | base64 -d > run.sh && chmod +x run.sh && '
-            f'timeout {timeout}s ./run.sh; rm -f run.sh"'
-        )
-
+    # ? Docker Container Configuration
     @property
     def config(self) -> dict:
         """Returns a Docker container configuration."""
@@ -75,46 +89,36 @@ class ContainerJobManagerSettings(BaseSettings):
             "stdout": True,
         }
 
+    # ? Docker Image Configuration
     @property
     def image_config(self) -> dict:
         """Returns a Docker image configuration."""
-        dockerfile = Path.cwd() / "app" / "background" / "job_manager" / "container"
+        _workdir = Path(f"/{self.workdir}")
         return {
-            "tag": f"buildbot/runner:{self.tag}",
-            "path": str(dockerfile),
+            "tag": self.image_tag,
+            "path": str(self.dockerfile_path),
+            "buildargs": {
+                "WORKDIR": str(_workdir),
+                "SCRIPT_PATH": f"{_workdir}/{self._script_path}",
+            },
         }
 
+    def get_command(self, script: str) -> str:
+        """Generates a Docker command, encodes the script, sets a timeout and deletes run.sh."""
+        encoded_script = base64.b64encode(script.encode()).decode()
 
-class JobManagerSettings(BaseSettings):
-    """BuildBotJob settings."""
-
-    """Job Base Workdir"""
-    workdir: Path = "/workdir"
-
-    """Job Manager Schedule"""
-    manager_schedule: str = "*/1 * * * *"
-
-    """Job Maximum Time to Live in Seconds"""
-    job_ttl: int = 300
-
-    """Job Artifact Storage"""
-    artifact_storage: JobArtifactStorage = JobArtifactStorage.TAR_GZ
-
-    """Concurrent Jobs"""
-    concurrent_jobs: int = 10
-
-    """Job Artifact Path Templates"""
-    artifact_path_template: str = "{job_id}/artifact{file_extension}"
-    log_path_template: str = "{job_id}/logs/{filename}"
-
-    container: ContainerJobManagerSettings = ContainerJobManagerSettings()
+        return (
+            f'"echo {encoded_script} | base64 -d > {self._script_path} '
+            f"&& chmod +x {self._script_path} && timeout {self.job_timeout}s "
+            f'./{self._script_path}; rm -f {self._script_path}"'
+        )
 
 
-class LocalStorageSettings(BaseSettings):
-    """LocalStorage settings."""
+class ArtifactStorageSettings(BaseModel):
+    """Job Artifact Storage settings."""
 
-    artifact_volume: str = "storage"
-    volume_path: Path = (Path.cwd() / "data").resolve()
+    volume_path: Path = Path("data")
+    """Artifact Storage Volume Path"""
 
 
 class Settings(BaseSettings):
@@ -127,25 +131,44 @@ class Settings(BaseSettings):
 
     host: str = "127.0.0.1"
     port: int = 8000
-    # quantity of workers for uvicorn
-    workers_count: int = 1
-    # Enable uvicorn reloading
-    reload: bool = False
 
-    # Current environment
-    environment: str = "dev"
+    log_level: LogLevel = LogLevel.INFO
 
-    log_level: LogLevel = LogLevel.DEBUG
+    # ? Quantity of workers for uvicorn
+    uvicorn_workers_count: int = 1
 
+    # ? Enable uvicorn reloading
+    uvicorn_reload: bool = False
+
+    # ? Current environment
+    environment: Environment = Environment.PROD
+
+    if environment == Environment.DEV:
+        uvicorn_reload = True
+        log_level = LogLevel.DEBUG
+
+    # ? Redis
+    redis_settings: RedisSettings
+
+    # ? Job Manager
+    job_manager_settings: Annotated[
+        Union[
+            Annotated[ContainerJobManagerSettings, Tag(JobManagerType.CONTAINER)],
+            Annotated[JobManagerSettings, Tag(JobManagerType.BASE)],
+        ],
+        Discriminator(JobManagerSettings.discriminator),
+    ]
+    # ? Job Artifact Storage
+    artifact_storage_settings: ArtifactStorageSettings
+
+    # ? Pydantic Env
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="BUILDBOT_",
         env_file_encoding="utf-8",
+        extra="allow",
+        env_nested_delimiter="__",
     )
-
-    redis: RedisSettings = RedisSettings()
-    job_manager: JobManagerSettings = JobManagerSettings()
-    local_storage: LocalStorageSettings = LocalStorageSettings()
 
 
 settings = Settings()

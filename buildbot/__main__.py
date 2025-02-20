@@ -7,10 +7,10 @@ def main() -> None:
 
     uvicorn.run(
         "app.api.application:get_app",
-        workers=settings.workers_count,
+        workers=settings.uvicorn_workers_count,
         host=settings.host,
         port=settings.port,
-        reload=settings.reload,
+        reload=settings.uvicorn_reload,
         log_level=settings.log_level.value.lower(),
         factory=True,
     )

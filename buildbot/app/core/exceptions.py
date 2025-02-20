@@ -51,12 +51,14 @@ class JobCreationError(BaseError):
 class JobSchedulingError(BaseError):
     """Error raised when a Job cannot be scheduled."""
 
-    def __init__(self, *args: object) -> None:
-        self.message = self._format_message()
+    def __init__(self, reason: Optional[str], *args: object) -> None:
+        self.message = self._format_message(reason)
         super().__init__(self.message, *args)
 
-    def _format_message(self) -> str:
-        return "Could not schedule the Job."
+    def _format_message(self, reason: Optional[str]) -> str:
+        if not reason:
+            return "Could not schedule the Job."
+        return f"Could not schedule the Job. {reason}"
 
 
 class JobNotCompletedError(BaseError):
@@ -79,17 +81,6 @@ class JobFailedError(BaseError):
 
     def _format_message(self, job_id: str) -> str:
         return f"The Job(id={job_id}) execution failed."
-
-
-class JobOutputAccessDeniedError(BaseError):
-    """Error raised when the requested Job Output is forbidden."""
-
-    def __init__(self, job_id: str, path: Path, *args: object) -> None:
-        self.message = self._format_message(job_id, path)
-        super().__init__(self.message, *args)
-
-    def _format_message(self, job_id: str, path: Path) -> str:
-        return f"The path '{path}' is not on the Job(id={job_id}) directory."
 
 
 class JobOutputNotFoundError(BaseError):

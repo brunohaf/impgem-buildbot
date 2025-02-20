@@ -1,18 +1,18 @@
 from io import BytesIO
 from pathlib import Path
 
-from app.background import broker
 from app.core.exceptions import (
     JobCreationError,
     JobFailedError,
     JobNotFoundError,
-    JobOutputAccessDeniedError,
+    JobOutputNotFoundError,
     JobSchedulingError,
     TaskNotFoundError,
 )
 from app.repository.job.repository import JobRepository, get_job_repository
 from app.repository.job.schemas import Job, JobStatus
 from app.repository.task.schemas import Task
+from app.services.job.runner import JobRunner, get_job_runner
 from app.services.job.schema import JobDTO
 from app.services.storage import StorageService, get_storage_service
 from app.services.task.service import TaskService
@@ -28,11 +28,13 @@ class JobService:
         self,
         task_svc: TaskService = Depends(),
         job_repo: JobRepository = Depends(get_job_repository),
+        job_runner: JobRunner = Depends(get_job_runner),
         storage_service: StorageService = Depends(get_storage_service),
     ) -> None:
         self._logger = logger
         self._storage_svc = storage_service
         self._job_repo = job_repo
+        self._runner = job_runner
         self._task_svc = task_svc
 
     async def create(self, job_dto: JobDTO) -> str:
@@ -95,20 +97,21 @@ class JobService:
         )
 
     def _get_job_output(self, job_id: str, file_path: Path) -> BytesIO:
-        target = Path(file_path)
-
-        if not self._storage_svc.exists(Path(job_id)):
-            raise JobOutputAccessDeniedError(job_id, file_path)
-
-        return self._storage_svc.download(Path(job_id), target)
+        try:
+            target = Path(file_path)
+            return self._storage_svc.download(job_id, target)
+        except FileNotFoundError as e:
+            raise JobOutputNotFoundError(job_id, file_path) from e
 
     async def _schedule_job(self, job: Job, task: Task) -> None:
         try:
-            await broker.process.kiq(
-                job.id,
-                task.script,
-                job.env_vars,
-            )
+            self._logger.info(f"Processing job '{job.id}'.")
+
+            await self._runner.run(job.id, task.script, job.env_vars)
+            await self._job_repo.update_status(job.id, JobStatus.RUNNING)
+
+            self._logger.info(f"Job '{job.id}' processed successfully.")
+
         except Exception as e:
             raise JobSchedulingError from e
 
