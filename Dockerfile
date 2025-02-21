@@ -3,7 +3,7 @@ FROM python:3.11.4-slim-bullseye AS prod
 ENV PYTHONPATH=/app/buildbot
 
 # Installing curl for healthcheck
-# RUN apt-get update && apt-get install -y curl
+RUN apt-get update && apt-get install -y curl
 
 RUN pip install poetry==1.8.2
 
