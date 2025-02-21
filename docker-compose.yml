@@ -1,5 +1,6 @@
 services:
   api:
+    container_name: api
     build: &build
       context: .
       dockerfile: ./Dockerfile
@@ -8,54 +9,76 @@ services:
     env_file: &env_file
       - .env
     networks:
-      - front-end-network
-      - back-end-network
+      - backend
     ports:
       - 8000:8000
+    environment:
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
     volumes:
-      - buildbot_data:/data:ro
+      - storage:/app/buildbot/data:ro
+      - certs:/certs
+    depends_on:
+      - redis
+      - docker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 5s
+
+  job-manager:
+    container_name: job-manager
+    build: *build
+    image: *image
+    restart: *restart
+    env_file: *env_file
+    environment:
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
+    volumes:
+      - storage:/app/buildbot/data:rw
+      - certs:/certs
+    networks:
+      - backend
+    command:
+      - taskiq
+      - scheduler
+      - app.background.broker:scheduler
+    depends_on:
+      - redis
+      - docker
 
   redis:
     image: redis
     ports:
       - 6379:6379
     networks:
-      - back-end-network
+      - backend
 
-  job-worker:
-    build: *build
-    image: *image
-    restart: *restart
-    env_file: *env_file
-    volumes:
-      - buildbot_data:/data:rw
+  docker:
+    image: docker:dind
+    privileged: yes
+    restart: unless-stopped
+    container_name: docker
+    ports:
+      - 2376:2376
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
     networks:
-      - back-end-network
-    command:
-      - taskiq
-      - worker
-      - app.background.broker:broker
-
-  job-output-worker:
-    build: *build
-    image: *image
-    restart: *restart
-    env_file: *env_file
+      - backend
     volumes:
-      - buildbot_data:/data:rw
-    networks:
-      - back-end-network
-    command:
-      - taskiq
-      - scheduler
-      - app.background.broker:scheduler
+      - storage:/app/buildbot/data:rw
+      - certs:/certs
 
 volumes:
-  buildbot_data:
+  storage:
     driver: local
+  certs:
 
 networks:
-  front-end-network:
-    driver: bridge
-  back-end-network:
+  backend:
     driver: bridge
