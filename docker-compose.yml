@@ -1,3 +1,14 @@
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
+
+volumes:
+  storage:
+    driver: local
+  certs:
+
 services:
   api:
     container_name: api
@@ -5,20 +16,21 @@ services:
       context: .
       dockerfile: ./Dockerfile
     image: &image buildbot:${BUILDBOT_VERSION:-latest}
-    restart: &restart always
+    restart: &restart unless-stopped
     env_file: &env_file
       - .env
     networks:
-      - backend
+      - frontend
+      - &backend_net backend
     ports:
       - 8000:8000
-    environment:
+    environment: &docker_env
       - DOCKER_HOST=tcp://docker:2376
       - DOCKER_CERT_PATH=/certs/client
       - DOCKER_TLS_VERIFY=1
     volumes:
       - storage:/app/buildbot/data:ro
-      - certs:/certs
+      - &certs certs:/certs
     depends_on:
       - redis
       - docker
@@ -35,15 +47,12 @@ services:
     image: *image
     restart: *restart
     env_file: *env_file
-    environment:
-      - DOCKER_HOST=tcp://docker:2376
-      - DOCKER_CERT_PATH=/certs/client
-      - DOCKER_TLS_VERIFY=1
+    environment: *docker_env
     volumes:
-      - storage:/app/buildbot/data:rw
-      - certs:/certs
+      - &rw_storage storage:/app/buildbot/data:rw
+      - *certs
     networks:
-      - backend
+      - *backend_net
     command:
       - taskiq
       - scheduler
@@ -54,31 +63,18 @@ services:
 
   redis:
     image: redis
-    ports:
-      - 6379:6379
     networks:
       - backend
 
   docker:
     image: docker:dind
     privileged: yes
-    restart: unless-stopped
+    restart: *restart
     container_name: docker
-    ports:
-      - 2376:2376
     environment:
       - DOCKER_TLS_CERTDIR=/certs
     networks:
-      - backend
+      - *backend_net
     volumes:
-      - storage:/app/buildbot/data:rw
-      - certs:/certs
-
-volumes:
-  storage:
-    driver: local
-  certs:
-
-networks:
-  backend:
-    driver: bridge
+      - *rw_storage
+      - *certs
