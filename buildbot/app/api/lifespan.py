@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from app.background.broker import broker
+from app.core.settings import settings
+from app.services.job.runner import get_job_runner
 from fastapi import FastAPI
 
 
@@ -24,7 +26,7 @@ async def lifespan_setup(
         if not broker.is_worker_process:
             await broker.startup()
         app.middleware_stack = app.build_middleware_stack()
-
+        get_job_runner(settings.job_manager_settings.type).startup()
         yield
 
     finally:

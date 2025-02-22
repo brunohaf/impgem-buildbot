@@ -10,6 +10,8 @@ from docker import DockerClient
 from docker.errors import ImageNotFound
 from docker.models.images import Image
 
+from buildbot.app.core.enums import JobManagerType
+
 _container_settings: ContainerJobManagerSettings = settings.job_manager_settings
 
 
@@ -19,6 +21,10 @@ class JobRunner(ABC):
     @abstractmethod
     async def run(self, job_id: str, script: str, env_vars: Dict[str, str]) -> None:
         """Runs a Job."""
+
+    @abstractmethod
+    async def startup(self) -> None:
+        """Starts the Job Runner."""
 
 
 class ContainerJobRunner(JobRunner):
@@ -50,6 +56,15 @@ class ContainerJobRunner(JobRunner):
             job_logger.error(f"Error starting job '{job_id}': {e}")
             raise
 
+    def startup(self) -> None:
+        """Starts the Job Runner."""
+        self._logger.info("Starting job runner...")
+        self._client.ping()
+        self._logger.info("Docker API is ready.")
+        self._logger.info("Building Runner Container Image...")
+        _ = self._get_image()
+        self._logger.info("Job runner started.")
+
     def _get_image(self) -> Image:
         try:
             self._logger.info("Checking for existing Docker image.")
@@ -68,9 +83,13 @@ class ContainerJobRunner(JobRunner):
                 raise
 
 
-_runner = ContainerJobRunner()
+_container_runner = ContainerJobRunner()
 
 
-def get_job_runner() -> JobRunner:
+def get_job_runner(
+    job_manager_type: JobManagerType = _container_settings.type,
+) -> JobRunner:
     """Returns a JobRunner instance."""
-    return _runner
+    if job_manager_type == JobManagerType.CONTAINER:
+        return _container_runner
+    raise NotImplementedError(f"Unsupported job manager type: {job_manager_type}")
