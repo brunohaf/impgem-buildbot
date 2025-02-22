@@ -1,17 +1,16 @@
 import uvicorn
-
-from buildbot.core.settings import settings
+from app.core.settings import settings
 
 
 def main() -> None:
     """Entrypoint of the application."""
 
     uvicorn.run(
-        "buildbot.api.application:get_app",
-        workers=settings.workers_count,
+        "app.api.application:get_app",
+        workers=settings.uvicorn_workers_count,
         host=settings.host,
         port=settings.port,
-        reload=settings.reload,
+        reload=settings.uvicorn_reload,
         log_level=settings.log_level.value.lower(),
         factory=True,
     )
