@@ -1,3 +1,5 @@
+version: "3.8"
+
 networks:
   backend:
     driver: bridge
@@ -7,7 +9,6 @@ networks:
 volumes:
   storage:
     driver: local
-  certs:
 
 services:
   api:
@@ -24,16 +25,10 @@ services:
       - &backend_net backend
     ports:
       - 8000:8000
-    environment: &docker_env
-      - DOCKER_HOST=tcp://docker:2376
-      - DOCKER_CERT_PATH=/certs/client
-      - DOCKER_TLS_VERIFY=1
     volumes:
       - storage:/app/buildbot/data:ro
-      - &certs certs:/certs
     depends_on:
       - redis
-      - docker
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
@@ -47,10 +42,8 @@ services:
     image: *image
     restart: *restart
     env_file: *env_file
-    environment: *docker_env
     volumes:
-      - &rw_storage storage:/app/buildbot/data:rw
-      - *certs
+      - storage:/app/buildbot/data:rw
     networks:
       - *backend_net
     command:
@@ -59,22 +52,8 @@ services:
       - app.background.broker:scheduler
     depends_on:
       - redis
-      - docker
 
   redis:
     image: redis
     networks:
-      - backend
-
-  docker:
-    image: docker:dind
-    privileged: yes
-    restart: *restart
-    container_name: docker
-    environment:
-      - DOCKER_TLS_CERTDIR=/certs
-    networks:
       - *backend_net
-    volumes:
-      - *rw_storage
-      - *certs
