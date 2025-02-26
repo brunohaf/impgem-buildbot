@@ -64,6 +64,18 @@ A `Makefile` was created to simplify the setup and execution of the project. Her
    make run
    ```
 
+   - To stop the app, run:
+
+   ```bash
+   make stop_local
+   ```
+
+   - To stop the app using Docker Compose, run:
+
+   ```bash
+   make stop_docker
+   ```
+
 ### Docker Compose
 
 With Docker Compose, you can build and run the services as follows:
@@ -87,16 +99,6 @@ This will stop and remove the containers. To remove containers and volumes, you 
 ```bash
 docker-compose down -v
 ```
-
-#### Cleanup
-
-To remove unused images, volumes, and networks, run:
-
-```bash
-docker system prune -a --volumes
-```
-
-This command will remove all unused containers, networks, volumes, and images.
 
 ### TaskIQ Dependency
 

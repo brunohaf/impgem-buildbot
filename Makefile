@@ -102,19 +102,38 @@ run_redis:
 		echo "Redis container 'redis' is already running."; \
 	fi
 
+start_scheduler_local:
+	@$(CONDA_ACTIVATE) $(CONDA_ENV)
+	@echo "Starting TaskIQ scheduler..."
+	@nohup conda run -v -n buildbot env PYTHONPATH=buildbot taskiq scheduler app.background.broker:scheduler >> scheduler.log 2>&1 &
+	@if [ $$? -eq 0 ]; then \
+			echo "Scheduler started successfully"; \
+		else \
+			echo "Failed to start scheduler" >> scheduler.log; \
+		fi
+
+
 # Run app manually using FastAPI and Debugpy
 run_local:
 	@$(CONDA_ACTIVATE) $(CONDA_ENV)
 	@$(MAKE) run_redis
-	@echo "Starting TaskIQ scheduler..."
-	@nohup conda run -v -n buildbot env PYTHONPATH=buildbot taskiq scheduler app.background.broker:scheduler >> scheduler.log 2>&1 &
-	@echo "TaskIQ scheduler started in the background >> 'scheduler.log'. Starting Buildbot API..."
+	@$(MAKE) start_scheduler_local
 	@dotenv -f .env set BUILDBOT_REDIS_SETTINGS__HOST localhost > /dev/null
 	@dotenv -f $(CURDIR)/.env run python -m debugpy --listen 5678 --wait-for-client buildbot/__main__.py
 	@echo "Buildbot API started locally."
+
+# Stop the local app
+stop_local:
+	@ps -C dotenv -o pid --no-header | sed 's/^[[:space:]]*//' | xargs kill -9 > /dev/null  2>&1
+	@ps -C taskiq -o pid --no-header | sed 's/^[[:space:]]*//' | xargs kill -9 > /dev/null  2>&1
+
+# Stop the Docker app
+stop_docker:
+	@cd $(PWD) && docker-compose down
 
 # Build
 build: check_miniconda setup_env check_docker install_deps
 
 # Run the app
 run: build ask_run_method
+
