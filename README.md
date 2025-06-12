@@ -1,8 +1,47 @@
-# Neara's Buildbot
+<h1 align="center">
+  <br>
+  <div style="width:312px; height:312px; border-radius:50%; overflow:hidden; border:4px solid #333; margin: 0 auto; display:flex; align-items:center; justify-content:center;">
+    <img src="src/resources/impgem.png" alt="Imp Gem" style="width:100%; height:100%; object-fit:cover;">
+  </div>
+  The Imp Gem: A Self-Hosted CI/CD Forge of Clockwork Automation
+  <br>
+</h1>
 
-## Overview
+<h4 align="center">
+A bare-bones, containerized task automation system built with Python and <a href="https://www.docker.com/" target="_blank">Docker</a>, inspired by <a href="https://buildbot.net/" target="_blank">Buildbot</a> and ideas from <a href="https://github.com/actions/runner" target="_blank">GitHub Actions</a> containerized self-hosted runners.
+</h4>
+<div align="center">
+<em>
+   The <a href="https://divinityoriginalsin2.wiki.fextralife.com/Running+like+Clockwork" target="_blank">Imp Gem</a> is a mysterious artifact from Larian Studios' Divinity: Original Sin 2, containing an entire self-contained mechanical world—the Pocket Plane of Xantezza—completely isolated from the outside. Inside this gemstone, imp engineers run wild, endlessly tinkering, experimenting, and building strange contraptions in their infinite pocket universe of gears, springs, and slightly irresponsible inventions. Think: endless automation, bizarre machinery, and plenty of explosions… all entirely intentional.
+</em>
+</div>
+<br>
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"></a>
+  <a href="#"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
+  <a href="#"><img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/badge/chat-Gitter-ff69b4.svg" alt="Chat"></a>
+</p>
 
-This project is a containerized setup for a Buildbot-based service with multiple components, including an API server, a job manager, Redis, and a Docker-in-Docker (DinD) service. This project uses `docker-compose` to orchestrate the different services and their configurations, ensuring seamless communication and management. The services run in isolated networks (`frontend` and `backend`) and persistent volumes are used for data and certificates storage.
+<p align="center">
+  <a href="#key-features">Key Features</a> •
+  <a href="#related">Requirements</a> •
+  <a href="#how-to-use">How To Use</a> •
+  <a href="#related">Services</a> •
+  <a href="#related">Related</a> •
+  <a href="#license">License</a>
+</p>
+
+## Key Features
+
+* ⚙️ Containerized automation stack built with FastAPI, TaskIQ, and Redis, inspired by Buildbot and GitHub Actions runners
+* 🔥 Lightweight, self-hosted task runner for containerized, reproducible job execution
+* 🔄 Background task scheduling powered by TaskIQ with Redis as the message broker
+* 🔌 FastAPI-based API server for external orchestration, status reporting, and integration
+* 🔒 Isolated frontend and backend Docker networks for enhanced security and service separation
+* 🚀 Managed with docker-compose and streamlined with an optional Makefile workflow
+* 📦 Supports both local and containerized development setups with minimal friction
+* 🐳 Privileged Docker-in-Docker container (DinD) enabling nested container orchestration inside jobs#
 
 ## Requirements
 
@@ -14,7 +53,7 @@ Before you begin, ensure that you have the following tools installed:
 
 Ensure that your system has access to the necessary network and storage configurations.
 
-## How to Build and Run the Project
+## How to Use
 
 Follow the steps below to get the project running in your local environment.
 
@@ -22,9 +61,9 @@ Follow the steps below to get the project running in your local environment.
 
 Ensure you have a `.env` file in the root of your project directory (the default `.env` is available [here](./.env). This file should contain any necessary environment variables required by the services.
 
-## Building and Running Buildbot
+### Building and Running 
 
-### Makefile
+##### Makefile
 
 A `Makefile` was created to simplify the setup and execution of the project. Here's how you can use it:
 
@@ -76,7 +115,7 @@ A `Makefile` was created to simplify the setup and execution of the project. Her
    make stop_docker
    ```
 
-### Docker Compose
+#### Docker Compose
 
 With Docker Compose, you can build and run the services as follows:
 
@@ -86,7 +125,7 @@ docker-compose up --build
 
 This will build the images defined in the `Dockerfile`, start all the containers, and set up the services as per the `docker-compose.yml` file. The `--build` flag ensures that the containers are built before starting.
 
-#### Stopping the Services
+##### Stopping the Services
 
 When you want to stop the services, simply run:
 
@@ -100,7 +139,7 @@ This will stop and remove the containers. To remove containers and volumes, you 
 docker-compose down -v
 ```
 
-### TaskIQ Dependency
+##### TaskIQ Dependency
 
 Note that taskIQ must be running for the app to function properly. The scheduler service is started automatically in the background via a vscode pre-launch task (run-scheduler). To start the scheduler manually, run:
 
@@ -123,3 +162,17 @@ The project includes four main services:
 - **job-manager**: Manages background tasks and schedules jobs. It connects to the backend network and relies on Redis for communication.
 - **redis**: Redis instance that acts as a broker between services.
 - **docker**: Provides Docker-in-Docker (DinD) for containerized Docker tasks. It requires privileged access.
+
+
+## Related
+
+* [GitHub Actions](https://github.com/actions/runner) - Self-hosted runners and workflow automation
+* [Buildbot](https://buildbot.net/) - The CI automation framework
+
+## License
+
+MIT
+
+---
+
+> GitHub [@brunohaf](https://github.com/brunohaf)
