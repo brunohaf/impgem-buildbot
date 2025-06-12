@@ -64,7 +64,7 @@ Ensure you have a `.env` file in the root of your project directory (the default
 
 ### Building and Running 
 
-##### Makefile
+#### Makefile
 
 A `Makefile` was created to simplify the setup and execution of the project. Here's how you can use it:
 
@@ -126,7 +126,7 @@ docker-compose up --build
 
 This will build the images defined in the `Dockerfile`, start all the containers, and set up the services as per the `docker-compose.yml` file. The `--build` flag ensures that the containers are built before starting.
 
-##### Stopping the Services
+#### Stopping the Services
 
 When you want to stop the services, simply run:
 
@@ -140,7 +140,7 @@ This will stop and remove the containers. To remove containers and volumes, you 
 docker-compose down -v
 ```
 
-##### TaskIQ Dependency
+#### TaskIQ Dependency
 
 Note that taskIQ must be running for the app to function properly. The scheduler service is started automatically in the background via a vscode pre-launch task (run-scheduler). To start the scheduler manually, run:
 
@@ -148,7 +148,7 @@ Note that taskIQ must be running for the app to function properly. The scheduler
 conda run -v --live-stream -n buildbot env PYTHONPATH=buildbot taskiq scheduler app.background.broker:scheduler
 ```
 
-## Services
+## Architecture Overview
 
 The project includes four main services:
 
@@ -157,12 +157,38 @@ The project includes four main services:
 3. **Redis** - Acts as a message broker between the components.
 4. **Docker (DinD)** - Provides Docker-in-Docker functionality for tasks requiring Docker commands.
 
-### Service Breakdown:
+### Known Limitations
 
-- **api**: Exposes a REST API to interact with Buildbot. It connects to both the frontend and backend networks, maps port 8000, and uses environment variables and certificates.
-- **job-manager**: Manages background tasks and schedules jobs. It connects to the backend network and relies on Redis for communication.
-- **redis**: Redis instance that acts as a broker between services.
-- **docker**: Provides Docker-in-Docker (DinD) for containerized Docker tasks. It requires privileged access.
+- A routine is needed to reschedule jobs that failed to enqueue. This can be achieved by querying Redis for pending jobs and invoking the Job Manager, similar to the Job Service.
+- A cleanup routine could remove stray containers and prevent resource starvation. While containers are purged after artifact collection, a simple `docker container prune` every hour would suffice for an MVP.
+
+### Trade-offs
+
+- The design draws inspiration from GitHub Actions' container-based runners, utilizing [Docker-Py](https://github.com/docker/docker-py) and [TaskIQ](https://taskiq-python.github.io/) for job management. While Python’s `subprocess` + `user namespaces` or `chroot` were considered for job execution, `docker-py` was chosen for its superior isolation, albeit at the cost of additional complexity. This decision was driven by the need to keep the job runner isolated from both the host machine and the API server.
+
+  - Additionally, `docker-py` proved beneficial in streamlining the retrieval of job artifacts and capturing stdout/stderr from containers.
+  - The design uses base64-encoded commands passed to a Docker container. The application decodes and formats the command into a `run.sh` script, which is executed and then deleted to avoid residual files.
+
+- Redis was selected as the data store due to its simplicity, the limited number of entities involved, and the straightforward relationship between jobs and tasks.
+
+- TaskIQ was adopted for scheduling and managing background jobs, ensuring API responsiveness while keeping TaskIQ workers isolated from FastAPI’s main thread.
+
+- The design emphasizes adherence to SOLID principles and clean code, particularly through the use of interfaces and constructor dependency injection. This approach ensures cohesion, testability, and scalability while maintaining alignment with the open-closed principle. However, it introduces additional complexity due to the reliance on abstract classes and constructor dependency injection.
+
+  - A microservice architecture was implemented to separate the API, job manager, and storage, enhancing scalability and maintainability. For simplicity, the job manager uses the same image as the API Server.
+
+- Although [Docker-in-Docker (DinD)](https://hub.docker.com/_/docker) offers a viable development environment, its use in production environments, particularly in CI systems, has been discouraged. Jérôme Petazzoni, the tool’s author, highlighted these concerns in [an article](https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/), suggesting that alternative approaches should be considered for production deployments.
+
+## Improvements
+
+- Decorators can reduce verbosity in methods by separating logging from business logic.
+- More granular exception handling will improve troubleshooting. While critical methods are covered, exceptions from third-party packages often have vague messages and are caught far from their source. Using specific exceptions and defining clear error messages is recommended.
+- `docker-py` supports real-time stdout/stderr capture with `container.logs(stream=True)`, which could enable a WebSocket endpoint indexed by job ID for a CI/CD-like experience. Logs are collected when artifacts are retrieved, but no endpoints currently expose them to users.
+
+
+## Credits
+
+* [s3rius/Fast-API-Template](https://github.com/s3rius/FastAPI-template) - FastAPI project template
 
 
 ## Related
