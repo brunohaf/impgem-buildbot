@@ -1,7 +1,7 @@
 <h1 align="center">
   <br>
-  <div style="width:312px; height:312px; border-radius:50%; overflow:hidden; border:4px solid #333; margin: 0 auto; display:flex; align-items:center; justify-content:center;">
-    <img src="src/resources/impgem.png" alt="Imp Gem" style="width:100%; height:100%; object-fit:cover;">
+  <div style="width:20px; height:80px; border-radius:50%; overflow:hidden; border:4px solid #333; margin: 0 auto; display:flex; align-items:center; justify-content:center;">
+    <img src="src/resources/impgem.png" alt="Imp Gem" style="width:50%; height:100%; object-fit:cover;">
   </div>
   The Imp Gem: A Self-Hosted CI/CD Forge of Clockwork Automation
   <br>
