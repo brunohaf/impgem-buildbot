@@ -198,7 +198,7 @@ The project includes four main services:
 
 ## License
 
-MIT
+![MIT](LICENSE)
 
 ---
 
