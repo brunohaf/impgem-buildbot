@@ -34,15 +34,15 @@ A bare-bones, containerized task automation system built with Python and <a href
 
 ## Key Features
 
-  * ▶️ Robust system to run Bash commands or scripts from within isolated Docker containers asynchronously, delivering any generated artifacts on demand.
-  * ⚙️ Containerized automation stack built with FastAPI, TaskIQ, and Redis—drawing inspiration from Buildbot and GitHub Actions runners for scalable job orchestration
-  * 🔥 Lightweight, self-hosted task runner enabling reproducible, containerized job execution with guaranteed isolation
-  * 🔄 Asynchronous background task scheduling powered by TaskIQ, leveraging Redis as a fast and reliable message broker
-  * 🔌 FastAPI-based API server facilitating external orchestration, real-time status reporting, and seamless integration with other tools
-  * 🔒 Strict network isolation using dedicated frontend and backend Docker networks, enhancing security and service segregation
-  * 🚀 Managed through docker-compose for simplified deployment, complemented by an optional Makefile workflow to streamline development and operations
-  * 📦 Supports both local development and fully containerized environments, minimizing setup friction and ensuring consistency
-  * 🐳 Privileged Docker-in-Docker (DinD) container enabling nested container orchestration within jobs, expanding flexibility for complex workflows
+  * ▶️ Robust system to run Bash commands or scripts in isolated environments, delivering generated artifacts on demand
+  * ⚙️ Containerized automation stack built with FastAPI, TaskIQ, and Redis, inspired by Buildbot and GitHub Actions runners
+  * 🔥 Lightweight, self-hosted task runner for containerized, reproducible job execution
+  * 🔄 Background task scheduling powered by TaskIQ with Redis as the message broker
+  * 🔌 FastAPI-based API server for external orchestration, status reporting, and integration
+  * 🔒 Isolated frontend and backend Docker networks for enhanced security and service separation
+  * 🚀 Managed with docker-compose and streamlined with an optional Makefile workflow
+  * 📦 Supports both local and containerized development setups with minimal friction
+  * 🐳 Privileged Docker-in-Docker container (DinD) enabling nested container orchestration inside jobs#
 
 ## Requirements
 
