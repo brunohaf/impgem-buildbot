@@ -20,7 +20,7 @@ A bare-bones, containerized task automation system built with Python and <a href
   <a href="#"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"></a>
   <a href="#"><img src="https://img.shields.io/github/license/brunohaf/impgem-buildbot" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/badge/chat-Gitter-ff69b4.svg" alt="Chat"></a>
+<!--  <a href="#"><img src="https://img.shields.io/badge/chat-Gitter-ff69b4.svg" alt="Chat"></a> -->
 </p>
 
 <p align="center">
@@ -198,7 +198,7 @@ The project includes four main services:
 
 ## License
 
-![Apacha 2.0](LICENSE)
+![Apache 2.0](LICENSE)
 
 ---
 
